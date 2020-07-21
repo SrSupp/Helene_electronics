@@ -1,0 +1,40 @@
+{
+    "name": "ESP32CAN", 
+    "version": "0.0.1", 
+    "keywords": [
+        "device", 
+        "control"
+    ], 
+    "description": "ESP32-Arduino-CAN", 
+    "frameworks": [
+        "arduino"
+    ], 
+    "platforms": [
+        "espressif32"
+    ], 
+    "authors": [
+        {
+            "email": null, 
+            "url": null, 
+            "maintainer": false, 
+            "name": "Michael Wagner"
+        }
+    ], 
+    "repository": {
+        "type": "git", 
+        "url": "https://github.com/miwagner/ESP32-Arduino-CAN"
+    }, 
+    "homepage": null, 
+    "export": {
+        "include": null, 
+        "exclude": [
+            "extras", 
+            "docs", 
+            "tests", 
+            "test", 
+            "*.doxyfile", 
+            "*.pdf"
+        ]
+    }, 
+    "id": 5673
+}

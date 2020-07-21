@@ -1,0 +1,43 @@
+{
+    "name": "AS5048", 
+    "repository": {
+        "url": "https://os.mbed.com/users/megrootens/code/AS5048/", 
+        "type": "hg"
+    }, 
+    "platforms": [
+        "atmelsam", 
+        "freescalekinetis", 
+        "maxim32", 
+        "nordicnrf51", 
+        "nordicnrf52", 
+        "nxplpc", 
+        "riscv_gap", 
+        "siliconlabsefm32", 
+        "ststm32", 
+        "teensy", 
+        "wiznet7500"
+    ], 
+    "frameworks": [
+        "mbed"
+    ], 
+    "version": "9df31d15f3", 
+    "examples": [
+        "https://os.mbed.com/users/Technical_Muffin/code/heros_leg_readout_torque_addition/", 
+        "https://os.mbed.com/users/cnckiwi31/code/heros_leg_readout_torque_addition/"
+    ], 
+    "authors": [
+        {
+            "url": "https://os.mbed.com/users/megrootens/", 
+            "maintainer": false, 
+            "email": null, 
+            "name": "Martijn Grootens"
+        }
+    ], 
+    "keywords": [
+        "spi", 
+        "rotary sensor", 
+        "as5048"
+    ], 
+    "id": 3206, 
+    "description": "Library for SPI communication with the AMS AS5048 rotary sensor"
+}

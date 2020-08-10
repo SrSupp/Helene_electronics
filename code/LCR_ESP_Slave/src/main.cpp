@@ -756,6 +756,7 @@ scpi_error_t get_calvalueofoint(struct scpi_parser_context *context, struct scpi
       else
       {
         Serial.println(String(F("Timeout! The Joint did not answer or i could not send the CAN-packet")));
+        Serial.println("Transmit: " + String(l_igottotransmit) + " Response: " + String(l_gotanresponse));
       }
     }
     else
@@ -781,7 +782,7 @@ scpi_error_t get_calvalueofoint(struct scpi_parser_context *context, struct scpi
   return SCPI_SUCCESS;
 }
 
-//Gets the actual cal. data of one joint
+//Sets the actual cal. data of one joint
 scpi_error_t set_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;

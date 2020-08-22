@@ -38,6 +38,7 @@ int g_state = 0; //0 = Off+LED_Red; 1 = normal operation; 2 = going to initial p
 long g_ms_time_differenze_publish = 0;
 uint8_t g_led_rgb[3] = {0, 0, 0};
 boolean g_tx_frame_slave2master_send = false; //Is true, when there is a Can-packet, that should be sent.
+boolean g_tx_frame_slave2config_send = false; //Is true, when there is a Can-packet, that should be sent.
 uint8_t g_ma2sl_led_red;
 
 typedef union { // This structure is used to easily convert 2 long values into 8 uint8_t values for CAN communication
@@ -79,6 +80,7 @@ convert_config g_platine2config;
 CAN_device_t CAN_cfg;
 CAN_frame_t g_rx_frame_master2slave;
 CAN_frame_t g_tx_frame_slave2master;
+CAN_frame_t g_tx_frame_slave2config;
 /*
 Can ID List: 
 2:Master2Slave for Joint 2
@@ -126,7 +128,11 @@ void canwriteframe_Task(void *parameter) //This Task runs on a different core an
       ESP32Can.CANWriteFrame(&g_tx_frame_slave2master);
       g_tx_frame_slave2master_send = false; // Set it to false afterwards, so that a new message can be sent
     }
-    delayMicroseconds(10);
+    if(g_tx_frame_slave2config_send == true){
+      ESP32Can.CANWriteFrame(&g_tx_frame_slave2config);
+      g_tx_frame_slave2config_send = false;
+    }
+    delayMicroseconds(5);
     yield();
   }
 }
@@ -234,9 +240,10 @@ void setup()
 
 void loop()
 {
-
   while (xQueueReceive(CAN_cfg.rx_queue, &g_rx_frame_master2slave, 0) == pdTRUE) //I just received a CAN-packet
   {
+    //Serial.println("Inc. CAN-ID: " + String(g_rx_frame_master2slave.MsgID));
+    //Serial.println(String(g_rx_frame_master2slave.MsgID));
     if (g_rx_frame_master2slave.FIR.B.RTR != CAN_RTR && g_rx_frame_master2slave.MsgID == g_this_joint)
     {
       g_master2slave.data[0] = g_rx_frame_master2slave.data.u8[0];
@@ -334,21 +341,20 @@ void loop()
       }
       if (g_platine2config.answer_to_this == 1)
       {
-        CAN_frame_t l_tx_frame;
         g_platine2config.current_offset_value = EEPROM.readShort(EEPROM_ADDRESS_AS5048_OFFSET);
         g_platine2config.raw_magnet_angle = obj_angleSensor.getRawRotation();
-        l_tx_frame.data.u8[0] = g_platine2config.data[0];
-        l_tx_frame.data.u8[1] = g_platine2config.data[1];
-        l_tx_frame.data.u8[2] = g_platine2config.data[2];
-        l_tx_frame.data.u8[3] = g_platine2config.data[3];
-        l_tx_frame.data.u8[4] = g_platine2config.data[4];
-        l_tx_frame.data.u8[5] = g_platine2config.data[5];
-        l_tx_frame.data.u8[6] = g_platine2config.data[6];
-        l_tx_frame.data.u8[7] = g_platine2config.data[7];
-        l_tx_frame.FIR.B.FF = CAN_frame_std;
-        l_tx_frame.MsgID = 27;
-        l_tx_frame.FIR.B.DLC = 8;
-        ESP32Can.CANWriteFrame(&l_tx_frame);
+        g_tx_frame_slave2config.data.u8[0] = g_platine2config.data[0];
+        g_tx_frame_slave2config.data.u8[1] = g_platine2config.data[1];
+        g_tx_frame_slave2config.data.u8[2] = g_platine2config.data[2];
+        g_tx_frame_slave2config.data.u8[3] = g_platine2config.data[3];
+        g_tx_frame_slave2config.data.u8[4] = g_platine2config.data[4];
+        g_tx_frame_slave2config.data.u8[5] = g_platine2config.data[5];
+        g_tx_frame_slave2config.data.u8[6] = g_platine2config.data[6];
+        g_tx_frame_slave2config.data.u8[7] = g_platine2config.data[7];
+        g_tx_frame_slave2config.FIR.B.FF = CAN_frame_std;
+        g_tx_frame_slave2config.MsgID = 27;
+        g_tx_frame_slave2config.FIR.B.DLC = 8;
+        g_tx_frame_slave2config_send = true;
       }
     }
   }

@@ -26,9 +26,9 @@
 
 int g_this_joint = 0;
 
-float g_motor_transmission[6] = {6.25, 72.65, -18.75, 3, -2.89, -1};
+float g_motor_transmission[6] = {3.5, -84.48, -37.77, -4.75, -3, 1};
 int g_as_sign[6] = {1, 1, -1, 1, 1, 1};
-boolean g_high_motor_current[6] = {1, 1, 1, 1, 1, 0};
+boolean g_high_motor_current[6] = {1, 1, 1, 0, 1, 0};
 int g_enable_Nullpunktfahrt;
 
 long g_target_velocity;

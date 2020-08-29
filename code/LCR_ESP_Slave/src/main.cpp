@@ -301,7 +301,11 @@ void loop()
             obj_init_PID.Compute();
             //Serial.println("Pos: " + String(g_Input_obj_init_PID) + "  I-Summe: " + String(obj_init_PID.GetOutputSum()));
             tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
-            if (obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] > -10 && obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] < 10 && abs(tmc.get_vtarget()) < abs(25*g_motor_transmission[g_this_joint - 1]))
+            int angle = obj_angleSensor.getRotation();
+            if (g_this_joint == 3){
+              angle = angle + 4096;
+            }
+            if (abs(angle) < 10 && abs(tmc.get_vtarget()) < abs(25*g_motor_transmission[g_this_joint - 1]))
             { //Goal is reached
               tmc.set_velocity(0);
               l_thisjointisatgoal = true;

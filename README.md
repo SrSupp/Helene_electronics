@@ -10,5 +10,7 @@ A single motor control board consists of a microcontroller (ESP32), a stepper mo
 The 1st axis is equipped with an external magnetic encoder due to lack of space. All other axes have enough space so that the board can be mounted directly above the required magnet. 
 
 # Folder structure
+The boards are located in the folder "pcb". Here you will find the board for the external encoder and the motor control board. The source code for the boards can be found in the "code" folder. Stored there are the PlatformIO projects for the ROS Serial Slave (LCR_ESP_Master) and the other boards connected via CAN (LCR_ESP_Slave).
 
-The boards are located in the folder "pcb". Here you will find the board for the external encoder and the motor control board. The source code for the boards can be found in the "code" folder. Stored there are the PlatformIO projects for the ROS Serial Slave (LCR_ESP_Master) and the other boards connected via CAN (LCR_ESP_Slave). 
+# System structure of the robot arm
+ <a href="url"><img src="pictures/system.PNG" width="100%"></a>

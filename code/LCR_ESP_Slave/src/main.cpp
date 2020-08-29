@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <math.h>
 #include "Motor.h" //Das hier ist der TMC5160
 #include <AS5048A.h>
 #include <ESP32CAN.h>
@@ -67,7 +68,7 @@ convert_iiiil2c g_master2slave;
 typedef union { // This structure is used to easily convert 2 int values and 3 uint16 value into 8 uint8_t values for CAN communication
   struct
   {
-    uint8_t operation; //0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable
+    uint8_t operation; //0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable, 6 is to answer with the actual Angle (not RAW!)
     uint8_t answer_to_this;
     uint16_t current_offset_value;
     uint16_t tobesaved_offset_value;
@@ -106,7 +107,7 @@ Motor tmc = Motor(PIN_CS_TMC, PIN_EN_TMC, 10000, 10000, false);
 AS5048A obj_angleSensor(PIN_CS_INT_AMS);
 rgbVal *obj_pixels;
 double g_Input_obj_init_PID, g_Output_obj_init_PID, g_Setpoint_obj_init_PID;
-PID obj_init_PID(&g_Input_obj_init_PID, &g_Output_obj_init_PID, &g_Setpoint_obj_init_PID, 10, 50, 0.1, P_ON_M, DIRECT);
+PID obj_init_PID(&g_Input_obj_init_PID, &g_Output_obj_init_PID, &g_Setpoint_obj_init_PID, 30, 0.05, 0, P_ON_E, DIRECT);
 
 //SCPI Stuff
 struct scpi_parser_context ctx;
@@ -114,6 +115,7 @@ struct scpi_parser_context ctx;
 scpi_error_t identify(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t setzenullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t get_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t get_actlmagvalofjoint(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t set_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *command);
 
@@ -139,6 +141,7 @@ void canwriteframe_Task(void *parameter) //This Task runs on a different core an
 
 void setup()
 {
+  tmc.disable_motor();
   pinMode(PIN_CS_INT_AMS, OUTPUT);
   pinMode(PIN_CS_EXT_AMS, OUTPUT);
   pinMode(PIN_JOINT_ID_BIT3, INPUT_PULLUP);
@@ -170,6 +173,8 @@ void setup()
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "SETNULL", 7, "SENU", 4, setzenullpunktfahrt);
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETCALVALUE", 11, "GECA", 4, get_calvalueofoint);
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "SETCALVALUE", 11, "SECA", 4, set_calvalueofoint);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETACTUAL", 9, "GEAC", 4, get_actlmagvalofjoint);
+  
 
   //Neopixel initialisation
   ws2812_init(PIN_NEOPIXEL, LED_WS2812B);
@@ -224,9 +229,22 @@ void setup()
   obj_angleSensor.init();
   obj_angleSensor.setZeroPosition(l_ASoffset);
 
-  //Set the motor current and enable motor
+  //Set the motor current and enable motor. However it would not be great, if all motors would start at the same time. So first axis 1, then 2, then 3... are started.
+  for(int i=0; i<g_this_joint; i++) {
+      obj_pixels[0] = makeRGBVal(0, 0, 255);
+      ws2812_setColors(1, obj_pixels);
+      delay(200);
+      obj_pixels[0] = makeRGBVal(0, 0, 0);
+      ws2812_setColors(1, obj_pixels);
+      delay(200);
+  }
   tmc.enable_motor();
   tmc.set_current(g_high_motor_current[g_this_joint - 1]);
+  for(int i=g_this_joint; i<6; i++) {
+    delay(400);
+  }
+  obj_pixels[0] = makeRGBVal(255, 0, 0);
+  ws2812_setColors(1, obj_pixels);
 
   //The function ESP32Can.CANWriteFrame is blocking, when an error occours. For that reason, a new task is created, so that the main program still functions.
   xTaskCreatePinnedToCore(canwriteframe_Task, "canwriteframe_Task", 5000, NULL, 1, &canwriteframe_TaskHnd, 0);
@@ -242,9 +260,7 @@ void loop()
 {
   while (xQueueReceive(CAN_cfg.rx_queue, &g_rx_frame_master2slave, 0) == pdTRUE) //I just received a CAN-packet
   {
-    //Serial.println("Inc. CAN-ID: " + String(g_rx_frame_master2slave.MsgID));
-    //Serial.println(String(g_rx_frame_master2slave.MsgID));
-    if (g_rx_frame_master2slave.FIR.B.RTR != CAN_RTR && g_rx_frame_master2slave.MsgID == g_this_joint)
+    if (g_rx_frame_master2slave.FIR.B.RTR != CAN_RTR && g_rx_frame_master2slave.MsgID == g_this_joint) //I received a command package
     {
       g_master2slave.data[0] = g_rx_frame_master2slave.data.u8[0];
       g_master2slave.data[1] = g_rx_frame_master2slave.data.u8[1];
@@ -257,7 +273,7 @@ void loop()
       g_target_velocity = g_master2slave.target_velocity * g_motor_transmission[g_this_joint - 1];
       g_state = g_master2slave.operation_ident;
       g_ma2sl_led_red = 0;
-      boolean l_thisjointisatgoal = false; //I cant initialise variables inside the switch-routine
+      boolean l_thisjointisatgoal = false; //I cant initialise variables inside the switch-routine (Thanks C)
       long l_starttime = millis();
       switch (g_state)
       {
@@ -268,20 +284,24 @@ void loop()
         tmc.set_velocity(g_target_velocity);
         break;
       case 2:
-        if (g_enable_Nullpunktfahrt == 1)
+        if (g_enable_Nullpunktfahrt == 1) //case 2 is to do the Nullpunktfahrt. Only start it, if globally enabled!
         {
           obj_init_PID.SetMode(AUTOMATIC);
           obj_init_PID.SetOutputLimits(-5000, 5000);
-          obj_init_PID.SetSampleTime(9);
+          //obj_init_PID.SetSampleTime(9);
           g_Setpoint_obj_init_PID = 8192;
+          if(g_this_joint == 3){
+            g_Setpoint_obj_init_PID = 8192 + 4096;
+          }
           while (l_thisjointisatgoal == false && millis() - l_starttime < TIME_MS_TIMEOUT_NULLPUNKTFART) //PID Regler zum erreichen des Nullpunkts
           {
             obj_pixels[0] = makeRGBVal(0, 125 + 125 * sin(millis() / 50), 0);
             ws2812_setColors(1, obj_pixels);
             g_Input_obj_init_PID = double((obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] + 8192));
             obj_init_PID.Compute();
+            //Serial.println("Pos: " + String(g_Input_obj_init_PID) + "  I-Summe: " + String(obj_init_PID.GetOutputSum()));
             tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
-            if (obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] > -50 && obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] < 50)
+            if (obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] > -10 && obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] < 10 && abs(tmc.get_vtarget()) < abs(25*g_motor_transmission[g_this_joint - 1]))
             { //Goal is reached
               tmc.set_velocity(0);
               l_thisjointisatgoal = true;
@@ -342,7 +362,11 @@ void loop()
       if (g_platine2config.answer_to_this == 1)
       {
         g_platine2config.current_offset_value = EEPROM.readShort(EEPROM_ADDRESS_AS5048_OFFSET);
-        g_platine2config.raw_magnet_angle = obj_angleSensor.getRawRotation();
+        if (g_platine2config.operation == 6){
+          g_platine2config.raw_magnet_angle = obj_angleSensor.getRotation();
+        }else{
+          g_platine2config.raw_magnet_angle = obj_angleSensor.getRawRotation();
+        }
         g_tx_frame_slave2config.data.u8[0] = g_platine2config.data[0];
         g_tx_frame_slave2config.data.u8[1] = g_platine2config.data[1];
         g_tx_frame_slave2config.data.u8[2] = g_platine2config.data[2];
@@ -947,6 +971,107 @@ scpi_error_t setzenullpunktfahrt(struct scpi_parser_context *context, struct scp
     else
     {
       Serial.println(F("Wrong input! I expected a 1 or 0."));
+    }
+  }
+  else
+  {
+    Serial.println(F("Error"));
+    scpi_error error;
+    error.id = -200;
+    error.description = "Invalid unit";
+    error.length = 26;
+
+    scpi_queue_error(&ctx, error);
+    scpi_free_tokens(command);
+    return SCPI_SUCCESS;
+  }
+
+  scpi_free_tokens(command);
+
+  return SCPI_SUCCESS;
+}
+
+scpi_error_t get_actlmagvalofjoint(struct scpi_parser_context *context, struct scpi_token *command)
+{
+  struct scpi_token *args;
+  struct scpi_numeric output_numeric;
+  unsigned char output_value;
+
+  args = command;
+
+  while (args != NULL && args->type == 0)
+  {
+    args = args->next;
+  }
+
+  output_numeric = scpi_parse_numeric(args->value, args->length, 1e3, 0, 25e6);
+  if (output_numeric.length == 0 ||
+      (output_numeric.length == 2 && output_numeric.unit[0] == 'H' && output_numeric.unit[1] == 'z'))
+  {
+    //Here i can do stuff. output_numeric.value is my Variable
+    if (output_numeric.value == g_this_joint)
+    {
+      Serial.println(obj_angleSensor.getRotation());
+    }
+    else if (output_numeric.value > 0 && output_numeric.value < 7)
+    {
+      g_platine2config.answer_to_this = 1;
+      g_platine2config.operation = 6;
+      long l_starttime = millis();
+      boolean l_gotanresponse = false;
+      boolean l_igottotransmit = false;
+      int16_t answer = 0;
+      while (l_igottotransmit == false && millis() - l_starttime < 2000)
+      {
+        if (g_tx_frame_slave2master_send == false) //Wenn nix gesendet wird, dann baue ich einen neuen CAN-Frame! Und sende ihn
+        {
+          g_tx_frame_slave2master.FIR.B.FF = CAN_frame_std;
+          g_tx_frame_slave2master.MsgID = 20 + output_numeric.value;
+          g_tx_frame_slave2master.FIR.B.DLC = 8;
+          g_tx_frame_slave2master.data.u8[0] = g_platine2config.data[0];
+          g_tx_frame_slave2master.data.u8[1] = g_platine2config.data[1];
+          g_tx_frame_slave2master.data.u8[2] = g_platine2config.data[2];
+          g_tx_frame_slave2master.data.u8[3] = g_platine2config.data[3];
+          g_tx_frame_slave2master.data.u8[4] = g_platine2config.data[4];
+          g_tx_frame_slave2master.data.u8[5] = g_platine2config.data[5];
+          g_tx_frame_slave2master.data.u8[6] = g_platine2config.data[6];
+          g_tx_frame_slave2master.data.u8[7] = g_platine2config.data[7];
+          g_tx_frame_slave2master_send = true;
+          l_igottotransmit = true;
+        }
+      }
+      while (l_gotanresponse == false && millis() - l_starttime < 2000)
+      {                                                                                //Timeout after 1s
+        while (xQueueReceive(CAN_cfg.rx_queue, &g_rx_frame_master2slave, 0) == pdTRUE) //I just received a CAN-packet
+        {
+          if (g_rx_frame_master2slave.FIR.B.RTR != CAN_RTR && g_rx_frame_master2slave.MsgID == 27)
+          {
+            g_platine2config.data[0] = g_rx_frame_master2slave.data.u8[0];
+            g_platine2config.data[1] = g_rx_frame_master2slave.data.u8[1];
+            g_platine2config.data[2] = g_rx_frame_master2slave.data.u8[2];
+            g_platine2config.data[3] = g_rx_frame_master2slave.data.u8[3];
+            g_platine2config.data[4] = g_rx_frame_master2slave.data.u8[4];
+            g_platine2config.data[5] = g_rx_frame_master2slave.data.u8[5];
+            g_platine2config.data[6] = g_rx_frame_master2slave.data.u8[6];
+            g_platine2config.data[7] = g_rx_frame_master2slave.data.u8[7];
+            l_gotanresponse = true;
+            answer = g_platine2config.raw_magnet_angle;
+          }
+        }
+      }
+      if (l_gotanresponse == true && l_igottotransmit == true)
+      {
+        Serial.println(answer);
+      }
+      else
+      {
+        Serial.println(String(F("Timeout! The Joint did not answer or i could not send the CAN-packet")));
+        Serial.println("Transmit: " + String(l_igottotransmit) + " Response: " + String(l_gotanresponse));
+      }
+    }
+    else
+    {
+      Serial.println(F("Invalid Joint number"));
     }
   }
   else

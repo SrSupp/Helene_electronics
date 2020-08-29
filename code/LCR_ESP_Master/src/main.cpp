@@ -71,7 +71,7 @@ convert_iiiil2c g_master2slave;
 typedef union { // This structure is used to easily convert 2 int values and 3 uint16 value into 8 uint8_t values for CAN communication
   struct
   {
-    uint8_t operation; //0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable
+    uint8_t operation; //0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable, 6 is to answer with the actual Angle (not RAW!)
     uint8_t answer_to_this;
     uint16_t current_offset_value;
     uint16_t tobesaved_offset_value;
@@ -106,7 +106,7 @@ Motor tmc = Motor(PIN_CS_TMC, PIN_EN_TMC, 10000, 10000, false);
 AS5048A obj_angleSensor(PIN_CS_EXT_AMS);
 rgbVal *obj_pixels;
 double g_Input_obj_init_PID, g_Output_obj_init_PID, g_Setpoint_obj_init_PID;
-PID obj_init_PID(&g_Input_obj_init_PID, &g_Output_obj_init_PID, &g_Setpoint_obj_init_PID, 10, 50, 0.1, P_ON_M, DIRECT);
+PID obj_init_PID(&g_Input_obj_init_PID, &g_Output_obj_init_PID, &g_Setpoint_obj_init_PID, 30, 0.05, 0, P_ON_E, DIRECT);
 
 lcr_controller::jointPosition allAngles;
 lcr_controller::jointPosition allVelocities;
@@ -161,6 +161,7 @@ ros::Subscriber<std_msgs::UInt8> sub_ledgreen("lcr_led_green", sub_greenCallback
 
 void setup()
 {
+  tmc.disable_motor();
   pinMode(PIN_CS_INT_AMS, OUTPUT);
   pinMode(PIN_CS_EXT_AMS, OUTPUT);
   pinMode(PIN_JOINT_ID_BIT3, INPUT_PULLUP);
@@ -222,16 +223,29 @@ void setup()
   CAN_cfg.rx_queue = xQueueCreate(100, sizeof(CAN_frame_t));
   ESP32Can.CANInit();
 
-  //Set the motor current and enable motor
+  //Set the motor current and enable motor. However it would not be great, if all motors would start at the same time. So first axis 1, then 2, then 3... are started.
+  for(int i=0; i<g_this_joint; i++) {
+      obj_pixels[0] = makeRGBVal(0, 0, 255);
+      ws2812_setColors(1, obj_pixels);
+      delay(200);
+      obj_pixels[0] = makeRGBVal(0, 0, 0);
+      ws2812_setColors(1, obj_pixels);
+      delay(200);
+  }
   tmc.enable_motor();
   tmc.set_current(g_high_motor_current[g_this_joint - 1]);
+  for(int i=g_this_joint; i<6; i++) {
+    delay(400);
+  }
+  obj_pixels[0] = makeRGBVal(255, 0, 0);
+  ws2812_setColors(1, obj_pixels);
 
   //Start the magnetic rotary encoder and set the zero Position
   obj_angleSensor.init();
   obj_angleSensor.setZeroPosition(l_ASoffset);
 
   //Wait a bit to settle
-  delay(500);
+  delay(1500);
 
   //Now do the Nullpunktfahrt, if enabled
   if (g_enable_Nullpunktfahrt == 1)
@@ -262,7 +276,6 @@ void setup()
         long l_starttime = millis();
         obj_init_PID.SetMode(AUTOMATIC);
         obj_init_PID.SetOutputLimits(-5000, 5000);
-        obj_init_PID.SetSampleTime(9);
         g_Setpoint_obj_init_PID = 8192;
         while (l_thisjointisatgoal == false && millis() - l_starttime < TIME_MS_TIMEOUT_NULLPUNKTFART)
         {
@@ -271,7 +284,7 @@ void setup()
           g_Input_obj_init_PID = double((obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] + 8192));
           obj_init_PID.Compute();
           tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
-          if (obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] > -50 && obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] < 50)
+          if (abs(obj_angleSensor.getRotation()) < 5 && abs(tmc.get_vtarget()) < abs(25*g_motor_transmission[g_this_joint - 1]))
           { //Goal is reached
             tmc.set_velocity(0);
             l_thisjointisatgoal = true;
@@ -392,7 +405,11 @@ void loop()
       {
         CAN_frame_t l_tx_frame;
         g_platine2config.current_offset_value = EEPROM.readShort(EEPROM_ADDRESS_AS5048_OFFSET);
-        g_platine2config.raw_magnet_angle = obj_angleSensor.getRawRotation();
+        if (g_platine2config.operation == 6){
+          g_platine2config.raw_magnet_angle = obj_angleSensor.getRotation();
+        }else{
+          g_platine2config.raw_magnet_angle = obj_angleSensor.getRawRotation();
+        }
         l_tx_frame.data.u8[0] = g_platine2config.data[0];
         l_tx_frame.data.u8[1] = g_platine2config.data[1];
         l_tx_frame.data.u8[2] = g_platine2config.data[2];

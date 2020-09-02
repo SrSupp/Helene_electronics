@@ -240,7 +240,9 @@ void setup()
   }
   tmc.enable_motor();
   tmc.set_current(g_high_motor_current[g_this_joint - 1]);
-  tmc.set_acceleration(10000*abs(g_motor_transmission[g_this_joint-1]));
+  if(g_this_joint == 2 || g_this_joint == 3){ //Higher acceleration if axis 2 or 3. Due to the high transmission!
+    tmc.set_acceleration(10000*abs(g_motor_transmission[g_this_joint-1]));
+  }
   for(int i=g_this_joint; i<6; i++) {
     delay(400);
   }

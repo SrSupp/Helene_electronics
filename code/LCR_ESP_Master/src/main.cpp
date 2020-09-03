@@ -71,7 +71,7 @@ convert_iiiil2c g_master2slave;
 typedef union { // This structure is used to easily convert 2 int values and 3 uint16 value into 8 uint8_t values for CAN communication
   struct
   {
-    uint8_t operation; //0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable, 6 is to answer with the actual Angle (not RAW!)
+    uint8_t operation; //0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable, 6 is to answer with the actual Angle (not RAW!), 7 is to do Nullpunktfahrt
     uint8_t answer_to_this;
     uint16_t current_offset_value;
     uint16_t tobesaved_offset_value;
@@ -151,13 +151,37 @@ void sub_blueCallback(const std_msgs::UInt8 &led_msg)
 {
   g_master2slave.led_blue = led_msg.data;
 }
-ros::Subscriber<std_msgs::UInt8> sub_ledblue("lcr_led_blue", sub_blueCallback);
+ros::Subscriber<std_msgs::UInt8> sub_ledblue("helene_led_blue", sub_blueCallback);
 
 void sub_greenCallback(const std_msgs::UInt8 &led_msg)
 {
   g_master2slave.led_green = led_msg.data;
 }
-ros::Subscriber<std_msgs::UInt8> sub_ledgreen("lcr_led_green", sub_greenCallback);
+ros::Subscriber<std_msgs::UInt8> sub_ledgreen("helene_led_green", sub_greenCallback);
+
+//This axis does a Nullpunktfahrt
+void this_axis_do_Nullpunktfahrt(boolean l_thisjointisatgoal, long l_starttime)
+{
+  obj_init_PID.SetMode(AUTOMATIC);
+  obj_init_PID.SetOutputLimits(-5000, 5000);
+  g_Setpoint_obj_init_PID = 8192;
+  while (l_thisjointisatgoal == false && millis() - l_starttime < TIME_MS_TIMEOUT_NULLPUNKTFART)
+  {
+    obj_pixels[0] = makeRGBVal(0, 125 + 125 * sin(millis() / 50), 0);
+    ws2812_setColors(1, obj_pixels);
+    g_Input_obj_init_PID = double((obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] + 8192));
+    obj_init_PID.Compute();
+    tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
+    if (abs(obj_angleSensor.getRotation()) < 5 && abs(tmc.get_vtarget()) < abs(25 * g_motor_transmission[g_this_joint - 1]))
+    { //Goal is reached
+      tmc.set_velocity(0);
+      l_thisjointisatgoal = true;
+    }
+    delay(10);
+  }
+  obj_pixels[0] = makeRGBVal(0, 0, 0);
+  ws2812_setColors(1, obj_pixels);
+}
 
 void setup()
 {
@@ -224,17 +248,19 @@ void setup()
   ESP32Can.CANInit();
 
   //Set the motor current and enable motor. However it would not be great, if all motors would start at the same time. So first axis 1, then 2, then 3... are started.
-  for(int i=0; i<g_this_joint; i++) {
-      obj_pixels[0] = makeRGBVal(0, 0, 255);
-      ws2812_setColors(1, obj_pixels);
-      delay(200);
-      obj_pixels[0] = makeRGBVal(0, 0, 0);
-      ws2812_setColors(1, obj_pixels);
-      delay(200);
+  for (int i = 0; i < g_this_joint; i++)
+  {
+    obj_pixels[0] = makeRGBVal(0, 0, 255);
+    ws2812_setColors(1, obj_pixels);
+    delay(200);
+    obj_pixels[0] = makeRGBVal(0, 0, 0);
+    ws2812_setColors(1, obj_pixels);
+    delay(200);
   }
   tmc.enable_motor();
   tmc.set_current(g_high_motor_current[g_this_joint - 1]);
-  for(int i=g_this_joint; i<6; i++) {
+  for (int i = g_this_joint; i < 6; i++)
+  {
     delay(400);
   }
   obj_pixels[0] = makeRGBVal(255, 0, 0);
@@ -274,25 +300,7 @@ void setup()
       {
         boolean l_thisjointisatgoal = false;
         long l_starttime = millis();
-        obj_init_PID.SetMode(AUTOMATIC);
-        obj_init_PID.SetOutputLimits(-5000, 5000);
-        g_Setpoint_obj_init_PID = 8192;
-        while (l_thisjointisatgoal == false && millis() - l_starttime < TIME_MS_TIMEOUT_NULLPUNKTFART)
-        {
-          obj_pixels[0] = makeRGBVal(0, 125 + 125 * sin(millis() / 50), 0);
-          ws2812_setColors(1, obj_pixels);
-          g_Input_obj_init_PID = double((obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] + 8192));
-          obj_init_PID.Compute();
-          tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
-          if (abs(obj_angleSensor.getRotation()) < 5 && abs(tmc.get_vtarget()) < abs(25*g_motor_transmission[g_this_joint - 1]))
-          { //Goal is reached
-            tmc.set_velocity(0);
-            l_thisjointisatgoal = true;
-          }
-          delay(10);
-        }
-        obj_pixels[0] = makeRGBVal(0, 0, 0);
-        ws2812_setColors(1, obj_pixels);
+        this_axis_do_Nullpunktfahrt(l_thisjointisatgoal, l_starttime);
       }
       else if (l_actualjoint > 1 || l_actualjoint < 7) //Another Joint has to be driven to 0. I need to communicate via CAN with them
       {
@@ -364,8 +372,8 @@ void loop()
       g_actual_angles[rx_frame.MsgID - 11] = g_slave2master.angle;
       g_actual_velocities[rx_frame.MsgID - 11] = g_slave2master.velocity;
     }
-    else if (rx_frame.FIR.B.RTR != CAN_RTR && rx_frame.MsgID == 20 + g_this_joint)//I received a config packet for this specific axis
-    { 
+    else if (rx_frame.FIR.B.RTR != CAN_RTR && rx_frame.MsgID == 20 + g_this_joint) //I received a config packet for this specific axis
+    {
       g_platine2config.data[0] = rx_frame.data.u8[0];
       g_platine2config.data[1] = rx_frame.data.u8[1];
       g_platine2config.data[2] = rx_frame.data.u8[2];
@@ -374,7 +382,9 @@ void loop()
       g_platine2config.data[5] = rx_frame.data.u8[5];
       g_platine2config.data[6] = rx_frame.data.u8[6];
       g_platine2config.data[7] = rx_frame.data.u8[7];
-      //g_platine2config.operation: 0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable
+      boolean l_thisjointisatgoal = false;
+      long l_starttime = millis();
+      //g_platine2config.operation: 0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable,6 is to answer with actual pos instead of RAW, 7 is to do Nullpunktfahrt
       switch (g_platine2config.operation)
       {
       case 1:
@@ -398,6 +408,9 @@ void loop()
         EEPROM.write(EEPROM_ADDRESS_ENABLE_STARTUP, 0);
         EEPROM.commit();
         break;
+      case 7:
+        this_axis_do_Nullpunktfahrt(l_thisjointisatgoal, l_starttime);
+        break;
       default:
         break;
       }
@@ -405,9 +418,12 @@ void loop()
       {
         CAN_frame_t l_tx_frame;
         g_platine2config.current_offset_value = EEPROM.readShort(EEPROM_ADDRESS_AS5048_OFFSET);
-        if (g_platine2config.operation == 6){
+        if (g_platine2config.operation == 6)
+        {
           g_platine2config.raw_magnet_angle = obj_angleSensor.getRotation();
-        }else{
+        }
+        else
+        {
           g_platine2config.raw_magnet_angle = obj_angleSensor.getRawRotation();
         }
         l_tx_frame.data.u8[0] = g_platine2config.data[0];
@@ -419,7 +435,7 @@ void loop()
         l_tx_frame.data.u8[6] = g_platine2config.data[6];
         l_tx_frame.data.u8[7] = g_platine2config.data[7];
         l_tx_frame.FIR.B.FF = CAN_frame_std;
-        l_tx_frame.MsgID = 27; 
+        l_tx_frame.MsgID = 27;
         l_tx_frame.FIR.B.DLC = 8;
         ESP32Can.CANWriteFrame(&l_tx_frame);
       }

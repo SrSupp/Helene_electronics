@@ -38,7 +38,7 @@ Motor::Motor(int CS, int EN, long u_maxspeed, long u_acceleration, boolean u_hig
   if(u_highcurrent==true){
       send_Data(0x90,0x0006070A);
   }else{
-      send_Data(0x90,0x0006030A);
+      send_Data(0x90,0x00060304);
   }
   send_Data(0x91, 0x0000000A);     //TPOWERDOWN=10
   send_Data(0xF0, 0x00000000);     // PWMCONF
@@ -187,7 +187,7 @@ void Motor::set_current(boolean u_highcurrent)
   if(u_highcurrent==true){
       send_Data(0x90,0x0006070A);
   }else{
-      send_Data(0x90,0x0006030A);
+      send_Data(0x90,0x00060304);
   }
 }
 

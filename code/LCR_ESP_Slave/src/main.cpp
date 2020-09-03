@@ -68,7 +68,7 @@ convert_iiiil2c g_master2slave;
 typedef union { // This structure is used to easily convert 2 int values and 3 uint16 value into 8 uint8_t values for CAN communication
   struct
   {
-    uint8_t operation; //0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable, 6 is to answer with the actual Angle (not RAW!)
+    uint8_t operation; //0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable, 6 is to answer with the actual Angle (not RAW!), 7 is to do Nullpunkfahrt
     uint8_t answer_to_this;
     uint16_t current_offset_value;
     uint16_t tobesaved_offset_value;
@@ -116,8 +116,10 @@ scpi_error_t identify(struct scpi_parser_context *context, struct scpi_token *co
 scpi_error_t setzenullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t get_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t get_actlmagvalofjoint(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t get_rawvalofjoint(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t set_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t do_nullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command);
 
 TaskHandle_t canwriteframe_TaskHnd;
 
@@ -130,13 +132,49 @@ void canwriteframe_Task(void *parameter) //This Task runs on a different core an
       ESP32Can.CANWriteFrame(&g_tx_frame_slave2master);
       g_tx_frame_slave2master_send = false; // Set it to false afterwards, so that a new message can be sent
     }
-    if(g_tx_frame_slave2config_send == true){
+    if (g_tx_frame_slave2config_send == true)
+    {
       ESP32Can.CANWriteFrame(&g_tx_frame_slave2config);
       g_tx_frame_slave2config_send = false;
     }
     delayMicroseconds(5);
     yield();
   }
+}
+
+//This axis does a Nullpunktfahrt
+void this_axis_do_Nullpunktfahrt(boolean l_thisjointisatgoal, long l_starttime)
+{
+  obj_init_PID.SetMode(AUTOMATIC);
+  obj_init_PID.SetOutputLimits(-5000, 5000);
+  //obj_init_PID.SetSampleTime(9);
+  g_Setpoint_obj_init_PID = 8192;
+  if (g_this_joint == 3)
+  {
+    g_Setpoint_obj_init_PID = 8192 + 4096;
+  }
+  while (l_thisjointisatgoal == false && millis() - l_starttime < TIME_MS_TIMEOUT_NULLPUNKTFART) //PID Regler zum erreichen des Nullpunkts
+  {
+    obj_pixels[0] = makeRGBVal(0, 125 + 125 * sin(millis() / 50), 0);
+    ws2812_setColors(1, obj_pixels);
+    g_Input_obj_init_PID = double((obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] + 8192));
+    obj_init_PID.Compute();
+    //Serial.println("Pos: " + String(g_Input_obj_init_PID) + "  I-Summe: " + String(obj_init_PID.GetOutputSum()));
+    tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
+    int angle = obj_angleSensor.getRotation();
+    if (g_this_joint == 3)
+    {
+      angle = angle + 4096;
+    }
+    if (abs(angle) < 10 && abs(tmc.get_vtarget()) < abs(25 * g_motor_transmission[g_this_joint - 1]))
+    { //Goal is reached
+      tmc.set_velocity(0);
+      l_thisjointisatgoal = true;
+    }
+    delay(10);
+  }
+  obj_pixels[0] = makeRGBVal(0, 0, 0);
+  ws2812_setColors(1, obj_pixels);
 }
 
 void setup()
@@ -174,6 +212,8 @@ void setup()
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETCALVALUE", 11, "GECA", 4, get_calvalueofoint);
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "SETCALVALUE", 11, "SECA", 4, set_calvalueofoint);
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETACTUAL", 9, "GEAC", 4, get_actlmagvalofjoint);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETRAW", 6, "GERA", 4, get_rawvalofjoint);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "DONULL", 6, "DONU", 4, do_nullpunktfahrt);
   
 
   //Neopixel initialisation
@@ -230,20 +270,23 @@ void setup()
   obj_angleSensor.setZeroPosition(l_ASoffset);
 
   //Set the motor current and enable motor. However it would not be great, if all motors would start at the same time. So first axis 1, then 2, then 3... are started.
-  for(int i=0; i<g_this_joint; i++) {
-      obj_pixels[0] = makeRGBVal(0, 0, 255);
-      ws2812_setColors(1, obj_pixels);
-      delay(200);
-      obj_pixels[0] = makeRGBVal(0, 0, 0);
-      ws2812_setColors(1, obj_pixels);
-      delay(200);
+  for (int i = 0; i < g_this_joint; i++)
+  {
+    obj_pixels[0] = makeRGBVal(0, 0, 255);
+    ws2812_setColors(1, obj_pixels);
+    delay(200);
+    obj_pixels[0] = makeRGBVal(0, 0, 0);
+    ws2812_setColors(1, obj_pixels);
+    delay(200);
   }
   tmc.enable_motor();
   tmc.set_current(g_high_motor_current[g_this_joint - 1]);
-  if(g_this_joint == 2 || g_this_joint == 3){ //Higher acceleration if axis 2 or 3. Due to the high transmission!
-    tmc.set_acceleration(10000*abs(g_motor_transmission[g_this_joint-1]));
+  if (g_this_joint == 2 || g_this_joint == 3)
+  { //Higher acceleration if axis 2 or 3. Due to the high transmission!
+    tmc.set_acceleration(10000 * abs(g_motor_transmission[g_this_joint - 1]));
   }
-  for(int i=g_this_joint; i<6; i++) {
+  for (int i = g_this_joint; i < 6; i++)
+  {
     delay(400);
   }
   obj_pixels[0] = makeRGBVal(255, 0, 0);
@@ -289,34 +332,7 @@ void loop()
       case 2:
         if (g_enable_Nullpunktfahrt == 1) //case 2 is to do the Nullpunktfahrt. Only start it, if globally enabled!
         {
-          obj_init_PID.SetMode(AUTOMATIC);
-          obj_init_PID.SetOutputLimits(-5000, 5000);
-          //obj_init_PID.SetSampleTime(9);
-          g_Setpoint_obj_init_PID = 8192;
-          if(g_this_joint == 3){
-            g_Setpoint_obj_init_PID = 8192 + 4096;
-          }
-          while (l_thisjointisatgoal == false && millis() - l_starttime < TIME_MS_TIMEOUT_NULLPUNKTFART) //PID Regler zum erreichen des Nullpunkts
-          {
-            obj_pixels[0] = makeRGBVal(0, 125 + 125 * sin(millis() / 50), 0);
-            ws2812_setColors(1, obj_pixels);
-            g_Input_obj_init_PID = double((obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] + 8192));
-            obj_init_PID.Compute();
-            //Serial.println("Pos: " + String(g_Input_obj_init_PID) + "  I-Summe: " + String(obj_init_PID.GetOutputSum()));
-            tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
-            int angle = obj_angleSensor.getRotation();
-            if (g_this_joint == 3){
-              angle = angle + 4096;
-            }
-            if (abs(angle) < 10 && abs(tmc.get_vtarget()) < abs(25*g_motor_transmission[g_this_joint - 1]))
-            { //Goal is reached
-              tmc.set_velocity(0);
-              l_thisjointisatgoal = true;
-            }
-            delay(10);
-          }
-          obj_pixels[0] = makeRGBVal(0, 0, 0);
-          ws2812_setColors(1, obj_pixels);
+          this_axis_do_Nullpunktfahrt(l_thisjointisatgoal,l_starttime);
         }
         else
         {
@@ -339,7 +355,9 @@ void loop()
       g_platine2config.data[5] = g_rx_frame_master2slave.data.u8[5];
       g_platine2config.data[6] = g_rx_frame_master2slave.data.u8[6];
       g_platine2config.data[7] = g_rx_frame_master2slave.data.u8[7];
-      //g_platine2config.operation: 0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable
+      boolean l_thisjointisatgoal = false; //I cant initialise variables inside the switch-routine (Thanks C)
+      long l_starttime = millis();
+      //g_platine2config.operation: 0 is nothing, 1 is save the tobesaved_offset_value, 2 is to start the calibraton sequence, 3 is to end. In the Calibration Sequence the Motor is deactivated! 4 is to enable the Nullpunktfahrt, 5 is to disable, 6 is to send actual Position instead of raw, 7 is to do Nullpunktfahrt.
       switch (g_platine2config.operation)
       {
       case 1:
@@ -363,15 +381,21 @@ void loop()
         EEPROM.write(EEPROM_ADDRESS_ENABLE_STARTUP, 0);
         EEPROM.commit();
         break;
+      case 7:
+        this_axis_do_Nullpunktfahrt(l_thisjointisatgoal,l_starttime);
+        break;
       default:
         break;
       }
       if (g_platine2config.answer_to_this == 1)
       {
         g_platine2config.current_offset_value = EEPROM.readShort(EEPROM_ADDRESS_AS5048_OFFSET);
-        if (g_platine2config.operation == 6){
+        if (g_platine2config.operation == 6)
+        {
           g_platine2config.raw_magnet_angle = obj_angleSensor.getRotation();
-        }else{
+        }
+        else
+        {
           g_platine2config.raw_magnet_angle = obj_angleSensor.getRawRotation();
         }
         g_tx_frame_slave2config.data.u8[0] = g_platine2config.data[0];
@@ -561,7 +585,7 @@ scpi_error_t identify(struct scpi_parser_context *context, struct scpi_token *co
   Serial.println(F("LCR Roboter"));
   Serial.println(F("Hardware: Felix Herbst"));
   Serial.println(F("Elektronik: Sven Suppelt"));
-  Serial.println(F("Elektronik Softwareversion: V1.0"));
+  Serial.println(F("Elektronik Softwareversion: V1.1"));
   return SCPI_SUCCESS;
 }
 
@@ -998,6 +1022,7 @@ scpi_error_t setzenullpunktfahrt(struct scpi_parser_context *context, struct scp
   return SCPI_SUCCESS;
 }
 
+//Get actual position of joint
 scpi_error_t get_actlmagvalofjoint(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;
@@ -1074,6 +1099,192 @@ scpi_error_t get_actlmagvalofjoint(struct scpi_parser_context *context, struct s
       {
         Serial.println(String(F("Timeout! The Joint did not answer or i could not send the CAN-packet")));
         Serial.println("Transmit: " + String(l_igottotransmit) + " Response: " + String(l_gotanresponse));
+      }
+    }
+    else
+    {
+      Serial.println(F("Invalid Joint number"));
+    }
+  }
+  else
+  {
+    Serial.println(F("Error"));
+    scpi_error error;
+    error.id = -200;
+    error.description = "Invalid unit";
+    error.length = 26;
+
+    scpi_queue_error(&ctx, error);
+    scpi_free_tokens(command);
+    return SCPI_SUCCESS;
+  }
+
+  scpi_free_tokens(command);
+
+  return SCPI_SUCCESS;
+}
+
+//Get Raw position of joint
+scpi_error_t get_rawvalofjoint(struct scpi_parser_context *context, struct scpi_token *command)
+{
+  struct scpi_token *args;
+  struct scpi_numeric output_numeric;
+  unsigned char output_value;
+
+  args = command;
+
+  while (args != NULL && args->type == 0)
+  {
+    args = args->next;
+  }
+
+  output_numeric = scpi_parse_numeric(args->value, args->length, 1e3, 0, 25e6);
+  if (output_numeric.length == 0 ||
+      (output_numeric.length == 2 && output_numeric.unit[0] == 'H' && output_numeric.unit[1] == 'z'))
+  {
+    //Here i can do stuff. output_numeric.value is my Variable
+    if (output_numeric.value == g_this_joint)
+    {
+      Serial.println(obj_angleSensor.getRotation());
+    }
+    else if (output_numeric.value > 0 && output_numeric.value < 7)
+    {
+      g_platine2config.answer_to_this = 1;
+      g_platine2config.operation = 0;
+      long l_starttime = millis();
+      boolean l_gotanresponse = false;
+      boolean l_igottotransmit = false;
+      int16_t answer = 0;
+      while (l_igottotransmit == false && millis() - l_starttime < 2000)
+      {
+        if (g_tx_frame_slave2master_send == false) //Wenn nix gesendet wird, dann baue ich einen neuen CAN-Frame! Und sende ihn
+        {
+          g_tx_frame_slave2master.FIR.B.FF = CAN_frame_std;
+          g_tx_frame_slave2master.MsgID = 20 + output_numeric.value;
+          g_tx_frame_slave2master.FIR.B.DLC = 8;
+          g_tx_frame_slave2master.data.u8[0] = g_platine2config.data[0];
+          g_tx_frame_slave2master.data.u8[1] = g_platine2config.data[1];
+          g_tx_frame_slave2master.data.u8[2] = g_platine2config.data[2];
+          g_tx_frame_slave2master.data.u8[3] = g_platine2config.data[3];
+          g_tx_frame_slave2master.data.u8[4] = g_platine2config.data[4];
+          g_tx_frame_slave2master.data.u8[5] = g_platine2config.data[5];
+          g_tx_frame_slave2master.data.u8[6] = g_platine2config.data[6];
+          g_tx_frame_slave2master.data.u8[7] = g_platine2config.data[7];
+          g_tx_frame_slave2master_send = true;
+          l_igottotransmit = true;
+        }
+      }
+      while (l_gotanresponse == false && millis() - l_starttime < 2000)
+      {                                                                                //Timeout after 1s
+        while (xQueueReceive(CAN_cfg.rx_queue, &g_rx_frame_master2slave, 0) == pdTRUE) //I just received a CAN-packet
+        {
+          if (g_rx_frame_master2slave.FIR.B.RTR != CAN_RTR && g_rx_frame_master2slave.MsgID == 27)
+          {
+            g_platine2config.data[0] = g_rx_frame_master2slave.data.u8[0];
+            g_platine2config.data[1] = g_rx_frame_master2slave.data.u8[1];
+            g_platine2config.data[2] = g_rx_frame_master2slave.data.u8[2];
+            g_platine2config.data[3] = g_rx_frame_master2slave.data.u8[3];
+            g_platine2config.data[4] = g_rx_frame_master2slave.data.u8[4];
+            g_platine2config.data[5] = g_rx_frame_master2slave.data.u8[5];
+            g_platine2config.data[6] = g_rx_frame_master2slave.data.u8[6];
+            g_platine2config.data[7] = g_rx_frame_master2slave.data.u8[7];
+            l_gotanresponse = true;
+            answer = g_platine2config.raw_magnet_angle;
+          }
+        }
+      }
+      if (l_gotanresponse == true && l_igottotransmit == true)
+      {
+        Serial.println(answer);
+      }
+      else
+      {
+        Serial.println(String(F("Timeout! The Joint did not answer or i could not send the CAN-packet")));
+        Serial.println("Transmit: " + String(l_igottotransmit) + " Response: " + String(l_gotanresponse));
+      }
+    }
+    else
+    {
+      Serial.println(F("Invalid Joint number"));
+    }
+  }
+  else
+  {
+    Serial.println(F("Error"));
+    scpi_error error;
+    error.id = -200;
+    error.description = "Invalid unit";
+    error.length = 26;
+
+    scpi_queue_error(&ctx, error);
+    scpi_free_tokens(command);
+    return SCPI_SUCCESS;
+  }
+
+  scpi_free_tokens(command);
+
+  return SCPI_SUCCESS;
+}
+
+//does a Nullpunktfahrt of one axis
+scpi_error_t do_nullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command)
+{
+  struct scpi_token *args;
+  struct scpi_numeric output_numeric;
+  unsigned char output_value;
+
+  args = command;
+
+  while (args != NULL && args->type == 0)
+  {
+    args = args->next;
+  }
+
+  output_numeric = scpi_parse_numeric(args->value, args->length, 1e3, 0, 25e6);
+  if (output_numeric.length == 0 ||
+      (output_numeric.length == 2 && output_numeric.unit[0] == 'H' && output_numeric.unit[1] == 'z'))
+  {
+    //Here i can do stuff. output_numeric.value is my Variable
+    if (output_numeric.value == g_this_joint)
+    {
+      boolean l_thisjointisatgoal = false; //I cant initialise variables inside the switch-routine (Thanks C)
+      long l_starttime = millis();
+      this_axis_do_Nullpunktfahrt(l_thisjointisatgoal,l_starttime);
+      Serial.println("Ok");
+    }
+    else if (output_numeric.value > 0 && output_numeric.value < 7)
+    {
+      g_platine2config.answer_to_this = 0;
+      g_platine2config.operation = 7;
+      g_platine2config.tobesaved_offset_value = 0;
+      long l_starttime = millis();
+      boolean l_igottotransmit = false;
+      while (l_igottotransmit == false && millis() - l_starttime < 2000)
+      {
+        if (g_tx_frame_slave2master_send == false) //Wenn nix gesendet wird, dann baue ich einen neuen CAN-Frame! Und sende ihn
+        {
+          g_tx_frame_slave2master.FIR.B.FF = CAN_frame_std;
+          g_tx_frame_slave2master.MsgID = 20 + output_numeric.value;
+          g_tx_frame_slave2master.FIR.B.DLC = 8;
+          g_tx_frame_slave2master.data.u8[0] = g_platine2config.data[0];
+          g_tx_frame_slave2master.data.u8[1] = g_platine2config.data[1];
+          g_tx_frame_slave2master.data.u8[2] = g_platine2config.data[2];
+          g_tx_frame_slave2master.data.u8[3] = g_platine2config.data[3];
+          g_tx_frame_slave2master.data.u8[4] = g_platine2config.data[4];
+          g_tx_frame_slave2master.data.u8[5] = g_platine2config.data[5];
+          g_tx_frame_slave2master.data.u8[6] = g_platine2config.data[6];
+          g_tx_frame_slave2master.data.u8[7] = g_platine2config.data[7];
+          g_tx_frame_slave2master_send = true;
+          l_igottotransmit = true;
+        }
+      }
+      if (l_igottotransmit == true)
+      {
+        Serial.println("Ok");
+      }
+      else
+      {
+        Serial.println(String(F("Timeout! I could not send the CAN-packet")));
       }
     }
     else

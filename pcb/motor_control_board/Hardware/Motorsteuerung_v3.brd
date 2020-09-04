@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE eagle SYSTEM "eagle.dtd">
-<eagle version="9.5.2">
+<eagle version="9.6.0">
 <drawing>
 <settings>
 <setting alwaysvectorfont="no"/>
@@ -187,7 +187,7 @@
 <layer number="255" name="routoute" color="7" fill="1" visible="no" active="yes"/>
 </layers>
 <board>
-<fusionsync huburn="a.cGVyc29uYWw6dWUyYjBjZmRm" projecturn="a.cGVyc29uYWw6dWUyYjBjZmRmIzIwMTkwNzEwMjAzMDM3MDUx" f3durn="urn:adsk.wipprod:dm.lineage:UkR34FPES4C5YuISfHm_-Q" pcbguid="9584afbd-31c7-4aba-ace3-9ba1bc9fa79f" lastpulledtime="" lastsyncedchangeguid="a4446e10-05e5-533a-4639-39e679d7ad28"/>
+<fusionsync huburn="a.cGVyc29uYWw6dWUyYjBjZmRm" projecturn="a.cGVyc29uYWw6dWUyYjBjZmRmIzIwMTkwNzEwMjAzMDM3MDUx" f3durn="urn:adsk.wipprod:dm.lineage:UkR34FPES4C5YuISfHm_-Q" pcbguid="9584afbd-31c7-4aba-ace3-9ba1bc9fa79f" lastpulledtime="" lastsyncedchangeguid="a4446e10-05e5-533a-4639-39e679d7ad28" latestrevisionid="" lastsyncedrevisionid="" lastboardhashguid="" lastpushedtime="" linktopcb3d="%12"/>
 <plain>
 <rectangle x1="28.2" y1="20.7" x2="33.2" y2="25.7" layer="1"/>
 <wire x1="1.2" y1="0" x2="40.8" y2="0" width="0" layer="20"/>

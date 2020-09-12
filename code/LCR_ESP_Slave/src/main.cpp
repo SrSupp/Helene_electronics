@@ -112,14 +112,16 @@ PID obj_init_PID(&g_Input_obj_init_PID, &g_Output_obj_init_PID, &g_Setpoint_obj_
 //SCPI Stuff
 struct scpi_parser_context ctx;
 
-scpi_error_t identify(struct scpi_parser_context *context, struct scpi_token *command);
-scpi_error_t setzenullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command);
-scpi_error_t get_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command);
-scpi_error_t get_actlmagvalofjoint(struct scpi_parser_context *context, struct scpi_token *command);
-scpi_error_t get_rawvalofjoint(struct scpi_parser_context *context, struct scpi_token *command);
-scpi_error_t set_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command);
-scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *command);
-scpi_error_t do_nullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_identify(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_print_help(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_setzenullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_get_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_get_actlmagvalofjoint(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_get_rawvalofjoint(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_set_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_caljoint(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_do_nullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_do_offsetandnull(struct scpi_parser_context *context, struct scpi_token *command);
 
 TaskHandle_t canwriteframe_TaskHnd;
 
@@ -206,15 +208,16 @@ void setup()
   GEtCAlvalue
   */
   //Allgemein
-  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "*IDN?", 5, "IDN?", 4, identify);
-  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "CALSINGLEJOINT", 14, "CAJO", 4, caljoint);
-  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "SETNULL", 7, "SENU", 4, setzenullpunktfahrt);
-  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETCALVALUE", 11, "GECA", 4, get_calvalueofoint);
-  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "SETCALVALUE", 11, "SECA", 4, set_calvalueofoint);
-  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETACTUAL", 9, "GEAC", 4, get_actlmagvalofjoint);
-  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETRAW", 6, "GERA", 4, get_rawvalofjoint);
-  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "DONULL", 6, "DONU", 4, do_nullpunktfahrt);
-  
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "*IDN?", 5, "IDN?", 4, scpi_identify);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "HELP?", 5, "HELP", 4, scpi_print_help);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "CALSINGLEJOINT", 14, "CAJO", 4, scpi_caljoint);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "SETNULL", 7, "SENU", 4, scpi_setzenullpunktfahrt);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETCALVALUE", 11, "GECA", 4, scpi_get_calvalueofoint);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "SETCALVALUE", 11, "SECA", 4, scpi_set_calvalueofoint);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETACTUAL", 9, "GEAC", 4, scpi_get_actlmagvalofjoint);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETRAW", 6, "GERA", 4, scpi_get_rawvalofjoint);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "DONULL", 6, "DONU", 4, scpi_do_nullpunktfahrt);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "OFFANDNULL", 10, "OFNU", 4, scpi_do_offsetandnull);
 
   //Neopixel initialisation
   ws2812_init(PIN_NEOPIXEL, LED_WS2812B);
@@ -233,7 +236,7 @@ void setup()
       delay(200);
       obj_pixels[0] = makeRGBVal(0, 0, 0);
       ws2812_setColors(1, obj_pixels);
-      delay(200);
+      delay(2000);
     }
   }
 
@@ -332,7 +335,7 @@ void loop()
       case 2:
         if (g_enable_Nullpunktfahrt == 1) //case 2 is to do the Nullpunktfahrt. Only start it, if globally enabled!
         {
-          this_axis_do_Nullpunktfahrt(l_thisjointisatgoal,l_starttime);
+          this_axis_do_Nullpunktfahrt(l_thisjointisatgoal, l_starttime);
         }
         else
         {
@@ -382,7 +385,7 @@ void loop()
         EEPROM.commit();
         break;
       case 7:
-        this_axis_do_Nullpunktfahrt(l_thisjointisatgoal,l_starttime);
+        this_axis_do_Nullpunktfahrt(l_thisjointisatgoal, l_starttime);
         break;
       default:
         break;
@@ -470,17 +473,6 @@ void loop()
   }
 }
 
-int16_t calculatemagnetoffset(int16_t cal1, int16_t cal2) //This function calculates the zeroPosition of the AS5048A magnet encoder. It returns the zeroPosition and it gets the position of the two endstops of one joint
-{
-  int16_t output = 0;
-  output = (cal1 + cal2 - 16384) / 2;
-  if (output < 0)
-  {
-    output = output + 16384;
-  }
-  return output;
-}
-
 void setPowerstateofJoint(int jointid, boolean powerstate) //This function either activates or deactivates the motor of one joint. If powerstate == true the motor gets activated.
 {
   long l_starttime = millis();
@@ -521,7 +513,7 @@ void setPowerstateofJoint(int jointid, boolean powerstate) //This function eithe
   }
 }
 
-int16_t getRAWPositionofJoint(int jointid) //This function returns the raw angle of one Joint
+int16_t getRAWPositionofJoint(int jointid) //This function returns the current raw angle of one Joint
 {
   g_platine2config.answer_to_this = 1;
   g_platine2config.operation = 0;
@@ -577,8 +569,120 @@ int16_t getRAWPositionofJoint(int jointid) //This function returns the raw angle
   return g_platine2config.raw_magnet_angle;
 }
 
+long addAS5048positions(long l_number1, long l_number2) //This function adds two position, that for a example an offset can be added to an existing position. The problem is, that the numbers can´t just be added. There are boundaries!
+{
+  long l_output = l_number1 + l_number2;
+  if (l_output < 0)
+  {
+    l_output = l_output + 16384;
+  }
+  else if (l_output > 16384)
+  {
+    l_output = l_output - 16384;
+  }
+  return l_output;
+}
+
+void save_calvalueofjoint(int jointid, long calvalue) //Save the given calvalue on given joint
+{
+  if (jointid == g_this_joint)
+  {
+    EEPROM.writeShort(EEPROM_ADDRESS_AS5048_OFFSET, calvalue);
+    EEPROM.commit();
+    obj_angleSensor.setZeroPosition(calvalue);
+    Serial.println("Ok");
+  }
+  else if (jointid > 0 && jointid < 7)
+  {
+    g_platine2config.answer_to_this = 0;
+    g_platine2config.operation = 1;
+    g_platine2config.tobesaved_offset_value = calvalue;
+    long l_starttime = millis();
+    boolean l_igottotransmit = false;
+    while (l_igottotransmit == false && millis() - l_starttime < 2000)
+    {
+      if (g_tx_frame_slave2master_send == false) //Wenn nix gesendet wird, dann baue ich einen neuen CAN-Frame! Und sende ihn
+      {
+        g_tx_frame_slave2master.FIR.B.FF = CAN_frame_std;
+        g_tx_frame_slave2master.MsgID = 20 + jointid;
+        g_tx_frame_slave2master.FIR.B.DLC = 8;
+        g_tx_frame_slave2master.data.u8[0] = g_platine2config.data[0];
+        g_tx_frame_slave2master.data.u8[1] = g_platine2config.data[1];
+        g_tx_frame_slave2master.data.u8[2] = g_platine2config.data[2];
+        g_tx_frame_slave2master.data.u8[3] = g_platine2config.data[3];
+        g_tx_frame_slave2master.data.u8[4] = g_platine2config.data[4];
+        g_tx_frame_slave2master.data.u8[5] = g_platine2config.data[5];
+        g_tx_frame_slave2master.data.u8[6] = g_platine2config.data[6];
+        g_tx_frame_slave2master.data.u8[7] = g_platine2config.data[7];
+        g_tx_frame_slave2master_send = true;
+        l_igottotransmit = true;
+      }
+    }
+    if (l_igottotransmit == true)
+    {
+    }
+    else
+    {
+      Serial.println(String(F("Timeout! I could not send the CAN-packet")));
+    }
+  }
+  else
+  {
+    Serial.println(F("Invalid Joint number"));
+  }
+}
+
+void do_Nullpunktfahrt(int jointid)
+{
+  if (jointid == g_this_joint) // Finally do Nullpunktfahrt! :)
+  {
+    boolean l_thisjointisatgoal = false; //I cant initialise variables inside the switch-routine (Thanks C)
+    long l_starttime = millis();
+    this_axis_do_Nullpunktfahrt(l_thisjointisatgoal, l_starttime);
+    Serial.println("Ok");
+  }
+  else if (jointid > 0 && jointid < 7)
+  {
+    g_platine2config.answer_to_this = 0;
+    g_platine2config.operation = 7;
+    g_platine2config.tobesaved_offset_value = 0;
+    long l_starttime = millis();
+    boolean l_igottotransmit = false;
+    while (l_igottotransmit == false && millis() - l_starttime < 2000)
+    {
+      if (g_tx_frame_slave2master_send == false) //Wenn nix gesendet wird, dann baue ich einen neuen CAN-Frame! Und sende ihn
+      {
+        g_tx_frame_slave2master.FIR.B.FF = CAN_frame_std;
+        g_tx_frame_slave2master.MsgID = 20 + jointid;
+        g_tx_frame_slave2master.FIR.B.DLC = 8;
+        g_tx_frame_slave2master.data.u8[0] = g_platine2config.data[0];
+        g_tx_frame_slave2master.data.u8[1] = g_platine2config.data[1];
+        g_tx_frame_slave2master.data.u8[2] = g_platine2config.data[2];
+        g_tx_frame_slave2master.data.u8[3] = g_platine2config.data[3];
+        g_tx_frame_slave2master.data.u8[4] = g_platine2config.data[4];
+        g_tx_frame_slave2master.data.u8[5] = g_platine2config.data[5];
+        g_tx_frame_slave2master.data.u8[6] = g_platine2config.data[6];
+        g_tx_frame_slave2master.data.u8[7] = g_platine2config.data[7];
+        g_tx_frame_slave2master_send = true;
+        l_igottotransmit = true;
+      }
+    }
+    if (l_igottotransmit == true)
+    {
+    }
+    else
+    {
+      Serial.println(String(F("Timeout! I could not send the CAN-packet")));
+    }
+  }
+  else
+  {
+    Serial.println(F("Invalid Joint number"));
+  }
+}
+
 //Antwortet auf *IDN?
-scpi_error_t identify(struct scpi_parser_context *context, struct scpi_token *command)
+scpi_error_t scpi_identify(struct scpi_parser_context *context, struct scpi_token *command)
 {
   scpi_free_tokens(command);
 
@@ -589,8 +693,150 @@ scpi_error_t identify(struct scpi_parser_context *context, struct scpi_token *co
   return SCPI_SUCCESS;
 }
 
+//Antwortet auf help?
+scpi_error_t scpi_print_help(struct scpi_parser_context *context, struct scpi_token *command)
+{
+  scpi_free_tokens(command);
+
+  Serial.println(F("TBD!"));
+  return SCPI_SUCCESS;
+}
+
+//Get current cal. value of joint
+int16_t get_currentcalvalueofjoint(int jointid)
+{
+  if (jointid == g_this_joint)
+  {
+    return EEPROM.readShort(EEPROM_ADDRESS_AS5048_OFFSET);
+  }
+  else if (jointid > 0 && jointid < 7)
+  {
+    g_platine2config.answer_to_this = 1;
+    g_platine2config.operation = 0;
+    long l_starttime = millis();
+    boolean l_gotanresponse = false;
+    boolean l_igottotransmit = false;
+    int16_t answer = 0;
+    while (l_igottotransmit == false && millis() - l_starttime < 2000)
+    {
+      if (g_tx_frame_slave2master_send == false) //Wenn nix gesendet wird, dann baue ich einen neuen CAN-Frame! Und sende ihn
+      {
+        g_tx_frame_slave2master.FIR.B.FF = CAN_frame_std;
+        g_tx_frame_slave2master.MsgID = 20 + jointid;
+        g_tx_frame_slave2master.FIR.B.DLC = 8;
+        g_tx_frame_slave2master.data.u8[0] = g_platine2config.data[0];
+        g_tx_frame_slave2master.data.u8[1] = g_platine2config.data[1];
+        g_tx_frame_slave2master.data.u8[2] = g_platine2config.data[2];
+        g_tx_frame_slave2master.data.u8[3] = g_platine2config.data[3];
+        g_tx_frame_slave2master.data.u8[4] = g_platine2config.data[4];
+        g_tx_frame_slave2master.data.u8[5] = g_platine2config.data[5];
+        g_tx_frame_slave2master.data.u8[6] = g_platine2config.data[6];
+        g_tx_frame_slave2master.data.u8[7] = g_platine2config.data[7];
+        g_tx_frame_slave2master_send = true;
+        l_igottotransmit = true;
+      }
+    }
+    while (l_gotanresponse == false && millis() - l_starttime < 2000)
+    {                                                                                //Timeout after 1s
+      while (xQueueReceive(CAN_cfg.rx_queue, &g_rx_frame_master2slave, 0) == pdTRUE) //I just received a CAN-packet
+      {
+        if (g_rx_frame_master2slave.FIR.B.RTR != CAN_RTR && g_rx_frame_master2slave.MsgID == 27)
+        {
+          g_platine2config.data[0] = g_rx_frame_master2slave.data.u8[0];
+          g_platine2config.data[1] = g_rx_frame_master2slave.data.u8[1];
+          g_platine2config.data[2] = g_rx_frame_master2slave.data.u8[2];
+          g_platine2config.data[3] = g_rx_frame_master2slave.data.u8[3];
+          g_platine2config.data[4] = g_rx_frame_master2slave.data.u8[4];
+          g_platine2config.data[5] = g_rx_frame_master2slave.data.u8[5];
+          g_platine2config.data[6] = g_rx_frame_master2slave.data.u8[6];
+          g_platine2config.data[7] = g_rx_frame_master2slave.data.u8[7];
+          l_gotanresponse = true;
+          answer = g_platine2config.current_offset_value;
+        }
+      }
+    }
+    if (l_gotanresponse == true && l_igottotransmit == true)
+    {
+      return answer;
+    }
+    else
+    {
+      Serial.println(String(F("Timeout! The Joint did not answer or i could not send the CAN-packet")));
+      Serial.println("Transmit: " + String(l_igottotransmit) + " Response: " + String(l_gotanresponse));
+    }
+  }
+}
+
+//Offset on the current cal. value and immediately do a Nullpunktsfahrt
+scpi_error_t scpi_do_offsetandnull(struct scpi_parser_context *context, struct scpi_token *command)
+{
+  struct scpi_token *args;
+  struct scpi_numeric output_numeric;
+  unsigned char output_value;
+
+  args = command;
+
+  while (args != NULL && args->type == 0)
+  {
+    args = args->next;
+  }
+
+  output_numeric = scpi_parse_numeric(args->value, args->length, 1e3, 0, 25e6);
+  if (output_numeric.length == 0 ||
+      (output_numeric.length == 2 && output_numeric.unit[0] == 'H' && output_numeric.unit[1] == 'z'))
+  {
+    if (output_numeric.value > 0 && output_numeric.value < 7)
+    {
+      long l_offsetvalue;
+      Serial.setTimeout(60000);
+      Serial.println(F("Please send the desired Offset value. 360° would be 16384."));
+      Serial.println(F("So for example: For -10°, you have to type: -455"));
+      l_offsetvalue = (Serial.readStringUntil('\n')).toInt();
+      Serial.println(String(F("Okay. Offset is: ")) + String(l_offsetvalue));
+      if (l_offsetvalue > -2000 && l_offsetvalue < 2000)
+      {
+        //First: get the current cal. value!
+        long l_currentcalvalue = get_currentcalvalueofjoint(output_numeric.value);
+        Serial.println(String(F("Current Calibration value is: ")) + String(l_currentcalvalue));
+        //Then add the offset to it
+        long l_newcalvalue = addAS5048positions(l_currentcalvalue, l_offsetvalue);
+        Serial.println(String(F("The new Calibration value is: ")) + String(l_newcalvalue));
+        // Save that new value
+        save_calvalueofjoint(output_numeric.value, l_newcalvalue);
+        Serial.println(String(F("The new calibration value has been saved.")));
+        //Now do Nullpunktfahrt
+        Serial.println(F("Now nullpunktfahrt."));
+        do_Nullpunktfahrt(output_numeric.value);
+        Serial.println(F("OK."));
+      }
+      else
+      {
+        Serial.println(String(F("Thats just too much. Exiting.")));
+      }
+    }
+    else
+    {
+      Serial.println(F("Invalid JointID"));
+    }
+  }
+  else
+  {
+    Serial.println(F("Error"));
+    scpi_error error;
+    error.id = -200;
+    error.description = "Invalid unit";
+    error.length = 26;
+
+    scpi_queue_error(&ctx, error);
+    scpi_free_tokens(command);
+    return SCPI_SUCCESS;
+  }
+  scpi_free_tokens(command);
+  return SCPI_SUCCESS;
+}
+
 //Cal a single Joint
-scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *command)
+scpi_error_t scpi_caljoint(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;
   struct scpi_numeric output_numeric;
@@ -611,8 +857,7 @@ scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *co
     if (output_numeric.value == g_this_joint)
     {
       Serial.println(F("In 5 seconds I will deactivate the selected Joint."));
-      Serial.println(F("After that you have 5 seconds until you have to move the joint to one of its endstops."));
-      Serial.println(F("After that you will have to move the joint to the other endstop."));
+      Serial.println(F("After that you have 5 seconds until you have to move the joint in its middle position."));
       Serial.println(F("Deactivating in 5s."));
       delay(1000);
       Serial.println(F("Deactivating in 4s."));
@@ -625,17 +870,22 @@ scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *co
       delay(1000);
       tmc.disable_motor();
       Serial.println(F("Deactivated."));
-      Serial.println(F("Please move the joint manually to one endstop. You have 5 seconds."));
+      Serial.println(F("Please move the joint manually to its zero position. You have 5 seconds."));
       delay(5000);
-      int16_t l_calvalue1 = obj_angleSensor.getRawRotation();
-      Serial.println(String(F("Okay, i measured: ")) + String(l_calvalue1));
-      Serial.println(F("Please move the joint manually to the other endstop. You have 5 seconds."));
-      delay(5000);
-      int16_t l_calvalue2 = obj_angleSensor.getRawRotation();
-      Serial.println(String(F("Okay, i measured: ")) + String(l_calvalue2));
-      int16_t l_offset = calculatemagnetoffset(l_calvalue1, l_calvalue2);
-      Serial.println(String(F("The zeroPosition would be: ")) + String(l_offset));
-      Serial.println(F("Can I save this value in the EEProm? Answer with 0/1. 1 = yes; 0=no."));
+      int16_t l_offset = obj_angleSensor.getRawRotation();
+      tmc.enable_motor();
+      if (output_numeric.value != 3)
+      {
+        Serial.println(String(F("The zero position would be: ")) + String(l_offset));
+        Serial.println(F("Should I save this value in the EEProm? Answer with 0/1. 1 = yes; 0=no."));
+      }
+      else
+      {
+        Serial.println(String(F("This is axis 3. I measured: ")) + String(l_offset));
+        l_offset = addAS5048positions(l_offset, 4096); //For axis 3 i have to add 90 degrees = 4096
+        Serial.println(String(F("Due to the offset of 90, The zero position would be: ")) + String(l_offset));
+        Serial.println(F("Should I save this value in the EEProm? Answer with 0/1. 1 = yes; 0=no."));
+      }
       Serial.setTimeout(60000);
       long temp;
       temp = (Serial.readStringUntil('\n')).toInt();
@@ -646,16 +896,12 @@ scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *co
         EEPROM.commit();
         Serial.println(F("I saved the value."));
       }
-      Serial.println(F("In 5s i will activate the motor again. Maybe bring axis in zeroposition?"));
-      delay(5000);
-      tmc.enable_motor();
       Serial.println(F("Ok"));
     }
     else if (output_numeric.value > 0 && output_numeric.value < 7)
     {
       Serial.println(F("In 5 seconds I will deactivate the selected Joint."));
-      Serial.println(F("After that you have 5 seconds until you have to move the joint to one of its endstops."));
-      Serial.println(F("After that you will have to move the joint to the other endstop."));
+      Serial.println(F("After that you have 5 seconds until you have to move the joint in its middle position."));
       Serial.println(F("Deactivating in 5s."));
       delay(1000);
       Serial.println(F("Deactivating in 4s."));
@@ -668,21 +914,26 @@ scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *co
       delay(1000);
       setPowerstateofJoint(output_numeric.value, false);
       Serial.println(F("Deactivated."));
-      Serial.println(F("Please move the joint manually to one endstop. You have 5 seconds."));
+      Serial.println(F("Please move the joint manually to its zero position. You have 5 seconds."));
       delay(5000);
-      int16_t l_calvalue1 = getRAWPositionofJoint(output_numeric.value);
-      Serial.println(String(F("Okay, i measured: ")) + String(l_calvalue1));
-      Serial.println(F("Please move the joint manually to the other endstop. You have 5 seconds."));
-      delay(5000);
-      int16_t l_calvalue2 = getRAWPositionofJoint(output_numeric.value);
-      Serial.println(String(F("Okay, i measured: ")) + String(l_calvalue2));
-      int16_t l_offset = calculatemagnetoffset(l_calvalue1, l_calvalue2);
-      Serial.println(String(F("The zeroPosition would be: ")) + String(l_offset));
-      Serial.println(F("Can I save this value in the EEProm? Answer with 0/1. 1 = yes; 0=no."));
+      int16_t l_offset = getRAWPositionofJoint(output_numeric.value);
+      setPowerstateofJoint(output_numeric.value, true);
+      if (output_numeric.value != 3)
+      {
+        Serial.println(String(F("The zero position would be: ")) + String(l_offset));
+        Serial.println(F("Should I save this value in the EEProm? Answer with 0/1. 1 = yes; 0=no."));
+      }
+      else
+      {
+        Serial.println(String(F("This is axis 3. I measured: ")) + String(l_offset));
+        l_offset = addAS5048positions(l_offset, 4096); //For axis 3 i have to add 90 degrees = 4096
+        Serial.println(String(F("Due to the offset of 90, The zero position would be: ")) + String(l_offset));
+        Serial.println(F("Should I save this value in the EEProm? Answer with 0/1. 1 = yes; 0=no."));
+      }
       Serial.setTimeout(60000);
       long temp;
       temp = (Serial.readStringUntil('\n')).toInt();
-      if (temp == 1)
+      if (temp == 1) //I save the value in Eeprom -> make a CAN packet and send it.
       {
         g_platine2config.answer_to_this = 0;
         g_platine2config.operation = 1;
@@ -712,10 +963,11 @@ scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *co
         {
           Serial.println(F("I saved the value."));
         }
+        else
+        {
+          Serial.println(F("Error while sending CAN packet!"));
+        }
       }
-      Serial.println(F("In 5s i will activate the motor again. Maybe bring axis in zeroposition?"));
-      delay(5000);
-      setPowerstateofJoint(output_numeric.value, true);
       Serial.println(F("Ok"));
     }
     else
@@ -742,7 +994,7 @@ scpi_error_t caljoint(struct scpi_parser_context *context, struct scpi_token *co
 }
 
 //Gets the actual cal. data of one joint
-scpi_error_t get_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command)
+scpi_error_t scpi_get_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;
   struct scpi_numeric output_numeric;
@@ -844,7 +1096,7 @@ scpi_error_t get_calvalueofoint(struct scpi_parser_context *context, struct scpi
 }
 
 //Sets the actual cal. data of one joint
-scpi_error_t set_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command)
+scpi_error_t scpi_set_calvalueofoint(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;
   struct scpi_numeric output_numeric;
@@ -932,7 +1184,7 @@ scpi_error_t set_calvalueofoint(struct scpi_parser_context *context, struct scpi
 }
 
 //Enable Nullpunktfahrt
-scpi_error_t setzenullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command)
+scpi_error_t scpi_setzenullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;
   struct scpi_numeric output_numeric;
@@ -1023,7 +1275,7 @@ scpi_error_t setzenullpunktfahrt(struct scpi_parser_context *context, struct scp
 }
 
 //Get actual position of joint
-scpi_error_t get_actlmagvalofjoint(struct scpi_parser_context *context, struct scpi_token *command)
+scpi_error_t scpi_get_actlmagvalofjoint(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;
   struct scpi_numeric output_numeric;
@@ -1125,7 +1377,7 @@ scpi_error_t get_actlmagvalofjoint(struct scpi_parser_context *context, struct s
 }
 
 //Get Raw position of joint
-scpi_error_t get_rawvalofjoint(struct scpi_parser_context *context, struct scpi_token *command)
+scpi_error_t scpi_get_rawvalofjoint(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;
   struct scpi_numeric output_numeric;
@@ -1145,7 +1397,7 @@ scpi_error_t get_rawvalofjoint(struct scpi_parser_context *context, struct scpi_
     //Here i can do stuff. output_numeric.value is my Variable
     if (output_numeric.value == g_this_joint)
     {
-      Serial.println(obj_angleSensor.getRotation());
+      Serial.println(obj_angleSensor.getRawRotation());
     }
     else if (output_numeric.value > 0 && output_numeric.value < 7)
     {
@@ -1227,7 +1479,7 @@ scpi_error_t get_rawvalofjoint(struct scpi_parser_context *context, struct scpi_
 }
 
 //does a Nullpunktfahrt of one axis
-scpi_error_t do_nullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command)
+scpi_error_t scpi_do_nullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command)
 {
   struct scpi_token *args;
   struct scpi_numeric output_numeric;
@@ -1249,7 +1501,7 @@ scpi_error_t do_nullpunktfahrt(struct scpi_parser_context *context, struct scpi_
     {
       boolean l_thisjointisatgoal = false; //I cant initialise variables inside the switch-routine (Thanks C)
       long l_starttime = millis();
-      this_axis_do_Nullpunktfahrt(l_thisjointisatgoal,l_starttime);
+      this_axis_do_Nullpunktfahrt(l_thisjointisatgoal, l_starttime);
       Serial.println("Ok");
     }
     else if (output_numeric.value > 0 && output_numeric.value < 7)

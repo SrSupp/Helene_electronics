@@ -30,6 +30,7 @@ Motor::Motor(int CS, int EN, long u_maxspeed, long u_acceleration, boolean u_hig
   pinMode(g_chipCS, OUTPUT);
   pinMode(EN, OUTPUT);
   g_pin_en = EN;
+  digitalWrite(g_pin_en,HIGH);
   tmc_spi_settings = SPISettings(4000000, MSBFIRST, SPI_MODE3);
   SPI.begin(14, 12, 13, 9);
   send_Data(0xA0, 0);

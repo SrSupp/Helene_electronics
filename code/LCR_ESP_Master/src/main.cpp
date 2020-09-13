@@ -269,6 +269,31 @@ void setup()
   //Start the magnetic rotary encoder and set the zero Position
   obj_angleSensor.init();
   obj_angleSensor.setZeroPosition(l_ASoffset);
+    //check if the angle sensor works
+  boolean l_boolean_isnotzero = false;
+  for(int i=0; i< 20; i++){ //One Reading in 20 should not be 0 due to noise. If not -> Sensor is missing!
+    if(obj_angleSensor.getRawRotation() != 0){
+      l_boolean_isnotzero = true;
+    }
+  }
+  if(l_boolean_isnotzero == false)//If all values have been 0 -> Error blinking
+  {
+    while (true)
+    {
+      obj_pixels[0] = makeRGBVal(255, 0, 0);
+      ws2812_setColors(1, obj_pixels);
+      delay(200);
+      obj_pixels[0] = makeRGBVal(0, 0, 0);
+      ws2812_setColors(1, obj_pixels);
+      delay(200);
+      obj_pixels[0] = makeRGBVal(255, 0, 0);
+      ws2812_setColors(1, obj_pixels);
+      delay(200);
+      obj_pixels[0] = makeRGBVal(0, 0, 0);
+      ws2812_setColors(1, obj_pixels);
+      delay(2000);
+    }
+  }
 
   //Wait a bit to settle
   delay(1500);

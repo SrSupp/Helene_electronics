@@ -22,7 +22,7 @@
 #define EEPROM_ADDRESS_ENABLE_STARTUP 1    //If the Integer at this Address = 1, the "Nullpunktfahrt" is enabled at startup
 #define EEPROM_ADDRESS_AS5048_OFFSET 10    //The magnet Offset is saved at the Adresses 10-13 as long
 #define TIME_MS_TIMEOUT_NULLPUNKTFART 7500 //The maximum amount of time per axis for the Nullpunktfahrt.
-#define TIME_MS_PUBLISH_FREQUENCY 13
+#define TIME_MS_PUBLISH_FREQUENCY 19 // A bit more than 50Hz
 #define TIME_MS_TIMEOUT_STOP 300 //If there is no command for 300ms, the Motor is automatically switched off.
 
 int g_this_joint = 0;

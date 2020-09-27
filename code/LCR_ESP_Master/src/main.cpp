@@ -159,6 +159,12 @@ void sub_greenCallback(const std_msgs::UInt8 &led_msg)
 }
 ros::Subscriber<std_msgs::UInt8> sub_ledgreen("helene_led_green", sub_greenCallback);
 
+void sub_reservedCallback(const std_msgs::UInt8 &res_msg)
+{
+  g_master2slave.reserved = res_msg.data;
+}
+ros::Subscriber<std_msgs::UInt8> sub_reserved("helene_reserved", sub_reservedCallback);
+
 //This axis does a Nullpunktfahrt
 void this_axis_do_Nullpunktfahrt(boolean l_thisjointisatgoal, long l_starttime)
 {
@@ -374,6 +380,7 @@ void setup()
   nh.subscribe(sub_vel);
   nh.subscribe(sub_ledblue);
   nh.subscribe(sub_ledgreen);
+  nh.subscribe(sub_reserved);
   nh.advertise(pub_angles);
   nh.advertise(pub_velocities);
 }

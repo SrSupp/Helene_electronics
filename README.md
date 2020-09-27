@@ -33,4 +33,24 @@ DONULL [joint ID] | DONU [joint ID] | The given joint will do a Nullpunktfahrt
 OFFANDNULL [joint ID] | OFNU [joint ID] | Sets a offset value on the current calibration value. After that a Nullpunktfahrt is initiated. Instructions are printed out!
 DIAG | DIA | Prints out diagnose data
 
+# Installation instructions
 
+1. Gather all materials.
+You will need 6 motor control boards and 1 external encoder board.
+2. Do the wiring. 
+You will have to run CAN and power to each motor control board. The boards are daisy-chainable!
+3. Program the boards.
+"ESP_LCR_MASTER" should be uploaded to the board in joint 1. This board is configured with rosserial so that it communicates directly with ROS.
+"ESP_LCR_SLAVE" should be uploaded to the boards in joint 2-6. These boards talk via CAN to the board in Joint 1 and thus receive their control information. With each individual board it is possible to calibrate the robot arm. 
+After programming, each board should slowly blink red!
+4. Set the SMD-Jumpers.
+For joints 1 and 6 the CAN terminating resistor must be set by bridging the SMD solder bridge next to the CAN sockets.
+SMD pads are provided next to the USB socket. These are used to configure the Joint-ID, which is set binary by bridging the SMD pads.  For example the joint 5: 0 1 0 1 must be set. 
+5. Calibrate the zero position
+6. Enable Nullpunktfahrt globally
+
+# Video installation instructions
+
+The installation process is also explained in the following video.
+[![](http://img.youtube.com/vi/I9vXAa9pZOI/0.jpg)](http://www.youtube.com/watch?v=I9vXAa9pZOI "")
+Starting at 0:09 the installation of the electronics is explained. From 6:21 on the calibration is shown.

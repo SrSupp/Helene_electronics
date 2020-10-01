@@ -45,7 +45,7 @@ You will have to run CAN and power to each motor control board. The boards are d
 After programming, each board should slowly blink red!
 4. Set the SMD-Jumpers.
 For joints 1 and 6 the CAN terminating resistor must be set by bridging the SMD solder bridge next to the CAN sockets.
-SMD pads are provided next to the USB socket. These are used to configure the Joint-ID, which is set binary by bridging the SMD pads.  For example the joint 5: 0 1 0 1 must be set. 
+Additionally the Joint-ID must be set for each board. For this purpose four SMD pads are provided next to the USB socket. By bridging these pads the ID can be set. The data format is binary with the most significant bit first. For example the joint 5: 0 1 0 1 must be set. 
 5. Calibrate the zero position
 6. Enable Nullpunktfahrt globally
 

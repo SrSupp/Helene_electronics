@@ -14,3 +14,43 @@ The boards are located in the folder "pcb". Here you will find the board for the
 
 # System structure of the robot arm
  <a href="url"><img src="pictures/system.PNG" width="100%"></a>
+
+# Available Serial Commands
+Each slave is equipped with the possibility of serial communication. Via this interface the calibration value of each axis can be read and set and status information can be read out. It is absolutely necessary to calibrate each axis individually!
+The following commands are available:
+
+long form | short form | description
+-------- | -------- | --------
+*IDN? | IDN? | Prints identification
+HELP? | HELP | Prints a help screen (not yet implemented)
+CALSINGLEJOINT [joint ID] | CAJO [joint ID] | starts the calibration process of given joint. Instructions will be printed after that command!
+SETNULL [0,1] | SENU [0,1] | globally enables (1) or disables (0) the Nullpunktfahrt at startup
+GETCALVALUE [joint ID] | GECA [joint ID] | Prints the current saved calibration value of given joint
+SETCALVALUE [joint ID] | SECA [joint ID] | Sets the current saved calibration value of given joint. Instructions are printed after that command!
+GETACTUAL [joint ID] | GEAC [joint ID] | Prints the actual angle of given joint. The actual angle is: Raw_Angle - Calibration_Value
+GETRAW [joint ID] | GERA [joint ID] | Prints the raw angle of given joint
+DONULL [joint ID] | DONU [joint ID] | The given joint will do a Nullpunktfahrt
+OFFANDNULL [joint ID] | OFNU [joint ID] | Sets a offset value on the current calibration value. After that a Nullpunktfahrt is initiated. Instructions are printed out!
+DIAG | DIA | Prints out diagnose data
+
+# Installation instructions
+
+1. Gather all materials.
+You will need 6 motor control boards and 1 external encoder board.
+2. Do the wiring. 
+You will have to run CAN and power to each motor control board. The boards are daisy-chainable!
+3. Program the boards.
+"ESP_LCR_MASTER" should be uploaded to the board in joint 1. This board is configured with rosserial so that it communicates directly with ROS.
+"ESP_LCR_SLAVE" should be uploaded to the boards in joint 2-6. These boards talk via CAN to the board in Joint 1 and thus receive their control information. With each individual board it is possible to calibrate the robot arm. 
+After programming, each board should slowly blink red!
+4. Set the SMD-Jumpers.
+For joints 1 and 6 the CAN terminating resistor must be set by bridging the SMD solder bridge next to the CAN sockets.
+Additionally the Joint-ID must be set for each board. For this purpose four SMD pads are provided next to the USB socket. By bridging these pads the ID can be set. The data format is binary with the most significant bit first. For example the joint 5: 0 1 0 1 must be set. 
+5. Calibrate the zero position
+6. Enable Nullpunktfahrt globally
+
+# Video installation instructions
+
+The installation process is also explained in the following video.
+[![](http://img.youtube.com/vi/I9vXAa9pZOI/0.jpg)](http://www.youtube.com/watch?v=I9vXAa9pZOI "")
+Starting at 0:09 the installation of the electronics is explained. From 6:21 on the calibration is shown.

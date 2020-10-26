@@ -122,6 +122,7 @@ scpi_error_t scpi_set_calvalueofoint(struct scpi_parser_context *context, struct
 scpi_error_t scpi_caljoint(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t scpi_do_nullpunktfahrt(struct scpi_parser_context *context, struct scpi_token *command);
 scpi_error_t scpi_do_offsetandnull(struct scpi_parser_context *context, struct scpi_token *command);
+scpi_error_t scpi_get_diag(struct scpi_parser_context *context, struct scpi_token *command);
 
 TaskHandle_t canwriteframe_TaskHnd;
 
@@ -218,6 +219,7 @@ void setup()
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "GETRAW", 6, "GERA", 4, scpi_get_rawvalofjoint);
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "DONULL", 6, "DONU", 4, scpi_do_nullpunktfahrt);
   scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "OFFANDNULL", 10, "OFNU", 4, scpi_do_offsetandnull);
+  scpi_register_command(ctx.command_tree, SCPI_CL_SAMELEVEL, "DIAG", 4, "DIA", 3, scpi_get_diag);
 
   //Neopixel initialisation
   ws2812_init(PIN_NEOPIXEL, LED_WS2812B);
@@ -1584,5 +1586,22 @@ scpi_error_t scpi_do_nullpunktfahrt(struct scpi_parser_context *context, struct 
 
   scpi_free_tokens(command);
 
+  return SCPI_SUCCESS;
+}
+
+//Print Diag. Info
+scpi_error_t scpi_get_diag(struct scpi_parser_context *context, struct scpi_token *command)
+{
+  Serial.println(F("Latest CAN-Package:"));
+  Serial.println(String(F("Target_Velocity: ")) + String(g_master2slave.target_velocity));
+  Serial.println(String(F("Reserved: ")) + String(g_master2slave.reserved));
+  Serial.println(String(F("LED_Blue: ")) + String(g_master2slave.led_blue));
+  Serial.println(String(F("LED_Green: ")) + String(g_master2slave.led_green));
+  Serial.println(String(F("OP-Ident: ")) + String(g_master2slave.operation_ident));
+  Serial.println(F("TMC Info:"));
+  Serial.println(String(F("Act. Velocity: ")) + String(tmc.get_vactual()));
+  Serial.println(F("AMS Info:"));
+  Serial.println(String(F("Act. Angle: ")) + String(obj_angleSensor.getRotation()));
+  scpi_free_tokens(command);
   return SCPI_SUCCESS;
 }

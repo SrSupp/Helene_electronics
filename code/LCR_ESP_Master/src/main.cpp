@@ -2,7 +2,7 @@
 #include "Motor.h" //Das hier ist der TMC5160
 #include <AS5048A.h>
 #include <ros.h>
-#include <lcr_controller/jointPosition.h>
+#include <controller_helene/jointPosition.h>
 #include <std_msgs/Empty.h>
 #include <ESP32CAN.h>
 #include <std_msgs/Int16.h>
@@ -108,14 +108,14 @@ rgbVal *obj_pixels;
 double g_Input_obj_init_PID, g_Output_obj_init_PID, g_Setpoint_obj_init_PID;
 PID obj_init_PID(&g_Input_obj_init_PID, &g_Output_obj_init_PID, &g_Setpoint_obj_init_PID, 30, 0.05, 0, P_ON_E, DIRECT);
 
-lcr_controller::jointPosition allAngles;
-lcr_controller::jointPosition allVelocities;
+controller_helene::jointPosition allAngles;
+controller_helene::jointPosition allVelocities;
 ros::NodeHandle nh;
 ros::Publisher pub_angles("actual_angles", &allAngles);
 ros::Publisher pub_velocities("actual_velocities", &allVelocities);
 
 //This method gehts called, if there is a new message in "joint_velocity"
-void sub_velocity(const lcr_controller::jointPosition &arm_steps)
+void sub_velocity(const controller_helene::jointPosition &arm_steps)
 {
   g_target_velocities[0] = arm_steps.joint1;
   g_target_velocities[1] = arm_steps.joint2;
@@ -145,7 +145,7 @@ void sub_velocity(const lcr_controller::jointPosition &arm_steps)
   tmc.set_velocity(g_target_velocities[0]);
   g_ma2sl_led_red = 0;
 }
-ros::Subscriber<lcr_controller::jointPosition> sub_vel("target_velocity", sub_velocity);
+ros::Subscriber<controller_helene::jointPosition> sub_vel("target_velocity", sub_velocity);
 
 void sub_blueCallback(const std_msgs::UInt8 &led_msg)
 {

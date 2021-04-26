@@ -7,6 +7,7 @@
 #include <EEPROM.h>
 #include <PID_v1.h>
 #include <scpiparser.h>
+#include <Servo.h>
 
 #define PI 3.1415926535897932384626433832795
 #define PIN_CS_TMC 15
@@ -14,6 +15,7 @@
 #define PIN_CS_INT_AMS 17
 #define PIN_CS_EXT_AMS 18
 #define PIN_NEOPIXEL 32
+#define PIN_GRIPPER 19
 #define PIN_JOINT_ID_BIT3 33
 #define PIN_JOINT_ID_BIT2 25
 #define PIN_JOINT_ID_BIT1 26
@@ -24,6 +26,8 @@
 #define TIME_MS_TIMEOUT_NULLPUNKTFART 7500 //The maximum amount of time per axis for the Nullpunktfahrt.
 #define TIME_MS_PUBLISH_FREQUENCY 19 // A bit more than 50Hz
 #define TIME_MS_TIMEOUT_STOP 300 //If there is no command for 300ms, the Motor is automatically switched off.
+
+Servo gripper;
 
 int g_this_joint = 0;
 
@@ -38,6 +42,7 @@ long g_actual_angle;
 int g_state = 0; //0 = Off+LED_Red; 1 = normal operation; 2 = going to initial position
 long g_ms_time_differenze_publish = 0;
 uint8_t g_led_rgb[3] = {0, 0, 0};
+uint8_t g_gripper = 0;
 boolean g_tx_frame_slave2master_send = false; //Is true, when there is a Can-packet, that should be sent.
 boolean g_tx_frame_slave2config_send = false; //Is true, when there is a Can-packet, that should be sent.
 uint8_t g_ma2sl_led_red;
@@ -226,6 +231,9 @@ void setup()
   obj_pixels = (rgbVal *)malloc(sizeof(rgbVal) * 1); //1 ist die Anzahl der Neopixel. Wir haben halt nur einen
   obj_pixels[0] = makeRGBVal(255, 0, 0);             // Rot am Anfang
   ws2812_setColors(1, obj_pixels);
+
+  //attach servo
+  gripper.attach(PIN_GRIPPER);
 
   //Check if JointID is valid
   if (g_this_joint == 0 || g_this_joint == 1 || g_this_joint > 6)
@@ -484,6 +492,11 @@ void loop()
       //Print LED Values here!
       obj_pixels[0] = makeRGBVal(g_led_rgb[0], g_led_rgb[1], g_led_rgb[2]);
       ws2812_setColors(1, obj_pixels);
+    }
+
+    if(g_gripper != g_master2slave.reserved){
+      g_gripper = g_master2slave.reserved;
+      gripper.write(g_gripper);
     }
   }
   yield();

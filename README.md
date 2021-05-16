@@ -1,8 +1,8 @@
-Author: Sven Suppelt		Date: 22.08.2020
+Author: Sven Suppelt, Felix Herbst		Date: 16.05.2021
 <a href="url"><img src="pictures/title.png" width="100%"></a>
 
 # HELENE - electronics for the low cost 6DOF robot
-This repository is responsible for the electronics for the Helene robotarm. Included are the PCBs and the program to run on these. 
+This repository is responsible for the electronics for the Helene robotarm. Included are the PCBs and the code to run on these. 
 
 The robot arm has a motor control board on each of its 6 axes. The board of the lowest axis, the 1st axis, acts as ROS Serial Slave. All other axes receive their control data from the 1st axis via CAN. 
 
@@ -10,7 +10,8 @@ A single motor control board consists of a microcontroller (ESP32), a stepper mo
 The 1st axis is equipped with an external magnetic encoder due to lack of space. All other axes have enough space so that the board can be mounted directly above the required magnet. 
 
 # Folder structure
-The boards are located in the folder "pcb". Here you will find the board for the external encoder and the motor control board. The source code for the boards can be found in the "code" folder. Stored there are the PlatformIO projects for the ROS Serial Slave (LCR_ESP_Master) and the other boards connected via CAN (LCR_ESP_Slave).
+The boards are located in the folder "pcb". Here you will find the board for the external encoder and the motor control board. The source code for the boards can be found in the "code" folder. Stored there are the PlatformIO projects for the ROS Serial Slave (Helene_ESP_Master) and the other boards connected via CAN (Helene_ESP_Slave).
+In the pcb folder there are two additional optional boards, the end effector board and a H-bridge with voltage converter. The end effector board has its own ESP32 with an ADC for measuring load cells. Furthermore, two outputs for servos are provided, so that grippers with integrated force measurement can be realized. The H-bridge is connected via the expansion ports on the boards and can drive motors up to 3A at 5V. It does not have its own microcontroller.
 
 # System structure of the robot arm
  <a href="url"><img src="pictures/system.PNG" width="100%"></a>
@@ -40,8 +41,8 @@ You will need 6 motor control boards and 1 external encoder board.
 2. Do the wiring. 
 You will have to run CAN and power to each motor control board. The boards are daisy-chainable!
 3. Program the boards.
-"ESP_LCR_MASTER" should be uploaded to the board in joint 1. This board is configured with rosserial so that it communicates directly with ROS.
-"ESP_LCR_SLAVE" should be uploaded to the boards in joint 2-6. These boards talk via CAN to the board in Joint 1 and thus receive their control information. With each individual board it is possible to calibrate the robot arm. 
+"Helene_ESP_Master" should be uploaded to the board in joint 1. This board is configured with rosserial so that it communicates directly with ROS.
+"Helene_ESP_Slave" should be uploaded to the boards in joint 2-6. These boards talk via CAN to the board in Joint 1 and thus receive their control information. With each individual board it is possible to calibrate the robot arm. 
 After programming, each board should slowly blink red!
 4. Set the SMD-Jumpers.
 For joints 1 and 6 the CAN terminating resistor must be set by bridging the SMD solder bridge next to the CAN sockets.

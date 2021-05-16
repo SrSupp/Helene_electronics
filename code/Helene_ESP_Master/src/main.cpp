@@ -8,6 +8,7 @@
 #include <std_msgs/Int16.h>
 #include <std_msgs/UInt16.h>
 #include <std_msgs/UInt8.h>
+#include <std_msgs/Float32.h>
 #include "ws2812.h"
 #include <EEPROM.h>
 #include <PID_v1.h>
@@ -81,6 +82,15 @@ typedef union { // This structure is used to easily convert 2 int values and 3 u
 } convert_config;
 convert_config g_platine2config;
 
+typedef union { // This structure is used to easily convert 4 int values and 1 long value into 8 uint8_t values for CAN communication
+  struct
+  {
+    float adc_value;
+  };
+  uint8_t data[4];
+} convert_f2c;
+convert_f2c g_meas2master;
+
 CAN_device_t CAN_cfg;
 /*
 Can ID List: 
@@ -101,6 +111,7 @@ Can ID List:
 25:platine2config to Joint 5
 26:platine2config to Joint 6
 27:platine2config to calibrationMaster from the previously adressed Joint
+42:meas2master from measurment setup to master. Gets published to raw_meas!
 */
 Motor tmc = Motor(PIN_CS_TMC, PIN_EN_TMC, 10000, 10000, false);
 AS5048A obj_angleSensor(PIN_CS_EXT_AMS);
@@ -110,84 +121,22 @@ PID obj_init_PID(&g_Input_obj_init_PID, &g_Output_obj_init_PID, &g_Setpoint_obj_
 
 controller_helene::jointPosition allAngles;
 controller_helene::jointPosition allVelocities;
+std_msgs::Float32 rawmeas;
 ros::NodeHandle nh;
 ros::Publisher pub_angles("actual_angles", &allAngles);
 ros::Publisher pub_velocities("actual_velocities", &allVelocities);
+ros::Publisher pub_meas("raw_meas", &allVelocities);
 
-//This method gehts called, if there is a new message in "joint_velocity"
-void sub_velocity(const controller_helene::jointPosition &arm_steps)
-{
-  g_target_velocities[0] = arm_steps.joint1;
-  g_target_velocities[1] = arm_steps.joint2;
-  g_target_velocities[2] = arm_steps.joint3;
-  g_target_velocities[3] = arm_steps.joint4;
-  g_target_velocities[4] = arm_steps.joint5;
-  g_target_velocities[5] = arm_steps.joint6;
-  g_master2slave.operation_ident = 1; //Normal Operation!
-  CAN_frame_t tx_frame;
-  for (int joint = 1; joint < 6; joint++)
-  {
-    tx_frame.FIR.B.FF = CAN_frame_std;
-    tx_frame.MsgID = joint + 1;
-    tx_frame.FIR.B.DLC = 8;
-    g_master2slave.target_velocity = g_target_velocities[joint];
-    tx_frame.data.u8[0] = g_master2slave.data[0];
-    tx_frame.data.u8[1] = g_master2slave.data[1];
-    tx_frame.data.u8[2] = g_master2slave.data[2];
-    tx_frame.data.u8[3] = g_master2slave.data[3];
-    tx_frame.data.u8[4] = g_master2slave.data[4];
-    tx_frame.data.u8[5] = g_master2slave.data[5];
-    tx_frame.data.u8[6] = g_master2slave.data[6];
-    tx_frame.data.u8[7] = g_master2slave.data[7];
-    ESP32Can.CANWriteFrame(&tx_frame);
-  }
-  g_target_velocities[0] = g_target_velocities[0] * g_motor_transmission[g_this_joint - 1];
-  tmc.set_velocity(g_target_velocities[0]);
-  g_ma2sl_led_red = 0;
-}
+void sub_velocity(const controller_helene::jointPosition &arm_steps);
+void this_axis_do_Nullpunktfahrt(boolean l_thisjointisatgoal, long l_starttime);
+void sub_blueCallback(const std_msgs::UInt8 &led_msg);
+void sub_greenCallback(const std_msgs::UInt8 &led_msg);
+void sub_reservedCallback(const std_msgs::UInt8 &res_msg);
+
 ros::Subscriber<controller_helene::jointPosition> sub_vel("target_velocity", sub_velocity);
-
-void sub_blueCallback(const std_msgs::UInt8 &led_msg)
-{
-  g_master2slave.led_blue = led_msg.data;
-}
 ros::Subscriber<std_msgs::UInt8> sub_ledblue("helene_led_blue", sub_blueCallback);
-
-void sub_greenCallback(const std_msgs::UInt8 &led_msg)
-{
-  g_master2slave.led_green = led_msg.data;
-}
-ros::Subscriber<std_msgs::UInt8> sub_ledgreen("helene_led_green", sub_greenCallback);
-
-void sub_reservedCallback(const std_msgs::UInt8 &res_msg)
-{
-  g_master2slave.reserved = res_msg.data;
-}
 ros::Subscriber<std_msgs::UInt8> sub_reserved("helene_reserved", sub_reservedCallback);
-
-//This axis does a Nullpunktfahrt
-void this_axis_do_Nullpunktfahrt(boolean l_thisjointisatgoal, long l_starttime)
-{
-  obj_init_PID.SetMode(AUTOMATIC);
-  obj_init_PID.SetOutputLimits(-5000, 5000);
-  g_Setpoint_obj_init_PID = 8192;
-  while (l_thisjointisatgoal == false && millis() - l_starttime < TIME_MS_TIMEOUT_NULLPUNKTFART)
-  {
-    obj_pixels[0] = makeRGBVal(0, 125 + 125 * sin(millis() / 50), 0);
-    ws2812_setColors(1, obj_pixels);
-    g_Input_obj_init_PID = double((obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] + 8192));
-    obj_init_PID.Compute();
-    tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
-    if (abs(obj_angleSensor.getRotation()) < 5 && abs(tmc.get_vtarget()) < abs(25 * g_motor_transmission[g_this_joint - 1]))
-    { //Goal is reached
-      tmc.set_velocity(0);
-      l_thisjointisatgoal = true;
-    }
-    delay(10);
-  }
-  obj_pixels[0] = makeRGBVal(0, 0, 0);
-  ws2812_setColors(1, obj_pixels);
-}
+ros::Subscriber<std_msgs::UInt8> sub_ledgreen("helene_led_green", sub_greenCallback);
 
 void setup()
 {
@@ -383,6 +332,7 @@ void setup()
   nh.subscribe(sub_reserved);
   nh.advertise(pub_angles);
   nh.advertise(pub_velocities);
+  nh.advertise(pub_meas);
 }
 
 void loop()
@@ -472,6 +422,15 @@ void loop()
         ESP32Can.CANWriteFrame(&l_tx_frame);
       }
     }
+    if (rx_frame.FIR.B.RTR != CAN_RTR && rx_frame.MsgID == 42) //I receive a can packet. ID-10 = The Joint where it came from. The data includes the angle an the velocity of a single joint.
+    {
+      g_meas2master.data[0] = rx_frame.data.u8[0];
+      g_meas2master.data[1] = rx_frame.data.u8[1];
+      g_meas2master.data[2] = rx_frame.data.u8[2];
+      g_meas2master.data[3] = rx_frame.data.u8[3];
+      rawmeas.data = g_meas2master.adc_value;
+      pub_meas.publish(&rawmeas);
+    }
   }
   if (millis() - g_ms_time_differenze_publish >= TIME_MS_PUBLISH_FREQUENCY) // Time to publish! Also LED and check Failsafe
   {
@@ -511,4 +470,75 @@ void loop()
     }
   }
   nh.spinOnce(); //Spin ROS-communication
+}
+
+//This method gehts called, if there is a new message in "joint_velocity"
+void sub_velocity(const controller_helene::jointPosition &arm_steps)
+{
+  g_target_velocities[0] = arm_steps.joint1;
+  g_target_velocities[1] = arm_steps.joint2;
+  g_target_velocities[2] = arm_steps.joint3;
+  g_target_velocities[3] = arm_steps.joint4;
+  g_target_velocities[4] = arm_steps.joint5;
+  g_target_velocities[5] = arm_steps.joint6;
+  g_master2slave.operation_ident = 1; //Normal Operation!
+  CAN_frame_t tx_frame;
+  for (int joint = 1; joint < 6; joint++)
+  {
+    tx_frame.FIR.B.FF = CAN_frame_std;
+    tx_frame.MsgID = joint + 1;
+    tx_frame.FIR.B.DLC = 8;
+    g_master2slave.target_velocity = g_target_velocities[joint];
+    tx_frame.data.u8[0] = g_master2slave.data[0];
+    tx_frame.data.u8[1] = g_master2slave.data[1];
+    tx_frame.data.u8[2] = g_master2slave.data[2];
+    tx_frame.data.u8[3] = g_master2slave.data[3];
+    tx_frame.data.u8[4] = g_master2slave.data[4];
+    tx_frame.data.u8[5] = g_master2slave.data[5];
+    tx_frame.data.u8[6] = g_master2slave.data[6];
+    tx_frame.data.u8[7] = g_master2slave.data[7];
+    ESP32Can.CANWriteFrame(&tx_frame);
+  }
+  g_target_velocities[0] = g_target_velocities[0] * g_motor_transmission[g_this_joint - 1];
+  tmc.set_velocity(g_target_velocities[0]);
+  g_ma2sl_led_red = 0;
+}
+
+void sub_blueCallback(const std_msgs::UInt8 &led_msg)
+{
+  g_master2slave.led_blue = led_msg.data;
+}
+
+void sub_greenCallback(const std_msgs::UInt8 &led_msg)
+{
+  g_master2slave.led_green = led_msg.data;
+}
+
+void sub_reservedCallback(const std_msgs::UInt8 &res_msg)
+{
+  g_master2slave.reserved = res_msg.data;
+}
+
+//This axis does a Nullpunktfahrt
+void this_axis_do_Nullpunktfahrt(boolean l_thisjointisatgoal, long l_starttime)
+{
+  obj_init_PID.SetMode(AUTOMATIC);
+  obj_init_PID.SetOutputLimits(-5000, 5000);
+  g_Setpoint_obj_init_PID = 8192;
+  while (l_thisjointisatgoal == false && millis() - l_starttime < TIME_MS_TIMEOUT_NULLPUNKTFART)
+  {
+    obj_pixels[0] = makeRGBVal(0, 125 + 125 * sin(millis() / 50), 0);
+    ws2812_setColors(1, obj_pixels);
+    g_Input_obj_init_PID = double((obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1] + 8192));
+    obj_init_PID.Compute();
+    tmc.set_velocity(long(g_Output_obj_init_PID * g_motor_transmission[g_this_joint - 1]));
+    if (abs(obj_angleSensor.getRotation()) < 5 && abs(tmc.get_vtarget()) < abs(25 * g_motor_transmission[g_this_joint - 1]))
+    { //Goal is reached
+      tmc.set_velocity(0);
+      l_thisjointisatgoal = true;
+    }
+    delay(10);
+  }
+  obj_pixels[0] = makeRGBVal(0, 0, 0);
+  ws2812_setColors(1, obj_pixels);
 }

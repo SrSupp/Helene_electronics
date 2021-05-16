@@ -125,7 +125,7 @@ std_msgs::Float32 rawmeas;
 ros::NodeHandle nh;
 ros::Publisher pub_angles("actual_angles", &allAngles);
 ros::Publisher pub_velocities("actual_velocities", &allVelocities);
-ros::Publisher pub_meas("raw_meas", &allVelocities);
+ros::Publisher pub_meas("raw_meas", &rawmeas);
 
 void sub_velocity(const controller_helene::jointPosition &arm_steps);
 void this_axis_do_Nullpunktfahrt(boolean l_thisjointisatgoal, long l_starttime);
@@ -428,12 +428,12 @@ void loop()
       g_meas2master.data[1] = rx_frame.data.u8[1];
       g_meas2master.data[2] = rx_frame.data.u8[2];
       g_meas2master.data[3] = rx_frame.data.u8[3];
-      rawmeas.data = g_meas2master.adc_value;
-      pub_meas.publish(&rawmeas);
     }
   }
   if (millis() - g_ms_time_differenze_publish >= TIME_MS_PUBLISH_FREQUENCY) // Time to publish! Also LED and check Failsafe
   {
+    rawmeas.data = g_meas2master.adc_value;
+    pub_meas.publish(&rawmeas);
     g_ms_time_differenze_publish = millis();
     g_actual_angles[0] = obj_angleSensor.getRotation() * g_as_sign[g_this_joint - 1];
     allAngles.joint1 = g_actual_angles[0];

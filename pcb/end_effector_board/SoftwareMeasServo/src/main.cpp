@@ -30,6 +30,8 @@ static const unsigned char PROGMEM logo_bmp[] = {
 	0x00, 0x0f, 0xff, 0xe0, 0x00, 0x0f, 0xff, 0xf0, 0x00, 0x0f, 0xff, 0xe0, 0x00, 0x00, 0x00, 0x00
 };
 
+static const char* g_names[] =  {"Helene", "FG: MuST","Sven Suppelt","Felix Herbst","Romal Chadda","Jan Hinrichs" ,"Dennis Roth","Esan Sundaralingam","Eric Pohl","Philipp Witulla","Prof. Kupnik","Technische","Universitaet","Darmstadt"};
+
 //Objekte:
 ADS1220 obj_ADC1 = ADS1220();
 Adafruit_SSD1306 obj_display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -91,32 +93,40 @@ void setup()
     for(;;); // Don't proceed, loop forever
   }
 
-  // Show initial display buffer contents on the screen --
-  // the library initializes this with an Adafruit splash screen.
+  //Initialize Screen and show all names inside g_names!
+  int l_namesize = 0;
+  int l_totalsize = sizeof(g_names);
+  Serial.println(F("Helene Roboterarm!"));
+  while(l_totalsize > 0){
+    l_totalsize -= sizeof(g_names[l_namesize]);
+    Serial.println(g_names[l_namesize]);
+    l_namesize++;
+  }
+
+  boolean l_switchnames = esp_random()%2;
+  
   obj_display.display();
   obj_display.clearDisplay();
   obj_display.setTextSize(1); // Draw 1X-scale text
   obj_display.setTextColor(SSD1306_WHITE);
-  obj_display.setCursor(0, 0);
-  obj_display.println(String(F("Helene")));
-  obj_display.println(String(F("Sven Suppelt")));
-  obj_display.println(String(F("Felix Herbst")));
-  obj_display.println(String(F("Romal Chadda")));
-  obj_display.drawBitmap(127-42,0,logo_bmp,32,32,1);
-  obj_display.display();
-  obj_display.setTextSize(2); // Draw 1X-scale text
-  delay(4000);
-  obj_display.clearDisplay();
-  obj_display.setTextSize(1); // Draw 1X-scale text
-  obj_display.setTextColor(SSD1306_WHITE);
-  obj_display.setCursor(0, 0);
-  obj_display.println(String(F("Prof. Mario Kupnik")));
-  obj_display.println(String(F("Jan Hinrichs")));
-  obj_display.println(String(F("Dennis Roth")));
-  obj_display.drawBitmap(127-42,0,logo_bmp,32,32,1);
-  obj_display.display();
-  obj_display.setTextSize(2); // Draw 1X-scale text
-  delay(2000);
+  for(int i = 0; i < (l_namesize)*8-31; i++){
+    obj_display.clearDisplay();
+    obj_display.setCursor(0, -i);
+    for (int ii = 0; ii < l_namesize; ii++){
+      if(ii == 2 || ii == 3){
+        obj_display.println(g_names[ii+l_switchnames*(5-2*ii)]);
+      } else {
+        obj_display.println(g_names[ii]);
+      }
+    }
+    obj_display.drawBitmap(127-34,0,logo_bmp,32,32,1);
+    obj_display.display();
+    if(i == 0){
+      delay(1000);
+    }
+    delay(120);
+  }
+  delay(1000);
 
   //Start the ADCs
   obj_ADC1.begin(PIN_ADC1_DRDY, PIN_ADC1_CS);
@@ -160,7 +170,6 @@ long g_ms_time_differenze_publish = 0;
 
 void loop()
 {
-
   if(millis() - g_ms_time_differenze_publish >= TIME_MS_PUBLISH_FREQUENCY){
     g_ms_time_differenze_publish = millis();
     if (g_tx_frame_meas2master_send == false) //Wenn nix gesendet wird, dann baue ich einen neuen CAN-Frame! Und sende ihn
@@ -177,10 +186,9 @@ void loop()
     }
   }
 
-
-  if(g_adc_newdata == true){
+  if(g_adc_newdata == true){ //Neue Daten vom ADC sind verfügbar
     g_adc_rawvalue = obj_ADC1.Read_Data()*0.1+0.9*g_adc_rawvalue;
-    //Serial.println(String(1000*g_adc_rawvalue,6));
+    Serial.println(String(g_adc_rawvalue,3));
     g_adc_newdata = false;
     delay(1);
   }
@@ -197,7 +205,6 @@ while (xQueueReceive(CAN_cfg.rx_queue, &g_rx_frame_master2slave, 0) == pdTRUE) /
       g_master2slave.data[5] = g_rx_frame_master2slave.data.u8[5];
       g_master2slave.data[6] = g_rx_frame_master2slave.data.u8[6];
       g_master2slave.data[7] = g_rx_frame_master2slave.data.u8[7];
-      Serial.println(g_rx_frame_master2slave.MsgID);
     }
   }
 }
@@ -239,7 +246,6 @@ void canwriteframe_Task(void *parameter) //This Task runs on a different core an
     {
       ESP32Can.CANWriteFrame(&g_tx_frame_meas2master);
       g_tx_frame_meas2master_send = false; // Set it to false afterwards, so that a new message can be sent
-      Serial.println(String(1000*g_adc_rawvalue,6));
     }
     delayMicroseconds(5);
     yield();

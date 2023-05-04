@@ -44,6 +44,7 @@ extern "C" {
 #include "driver/periph_ctrl.h"
 #include "freertos/semphr.h"
 #include "soc/rmt_struct.h"
+#include "soc/dport_reg.h"
 #elif defined(ESP_PLATFORM)
 #include <esp_intr.h>
 #include <driver/gpio.h>

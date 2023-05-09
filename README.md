@@ -1,4 +1,4 @@
-Author: Sven Suppelt, Felix Herbst		Date: 16.05.2021
+Author: Sven Suppelt, Felix Herbst		Date: 09.05.2023
 <a href="url"><img src="pictures/title.png" width="100%"></a>
 
 # HELENE - electronics for the low cost 6DOF robot

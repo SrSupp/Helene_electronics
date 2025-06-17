@@ -17476,9 +17476,9 @@ You are welcome to use this library for commercial purposes. For attribution, we
 <part name="GND7" library="supply1" deviceset="GND" device=""/>
 <part name="R9" library="rcl" library_urn="urn:adsk.eagle:library:334" deviceset="R-EU_" device="R0805" package3d_urn="urn:adsk.eagle:package:23553/2" value="10k"/>
 <part name="U$35" library="microbuilder" deviceset="3.3V" device="" value="+3V3"/>
-<part name="U4" library="74LVC1G00GW" deviceset="74LVC1G00GW" device="" override_package3d_urn="urn:adsk.eagle:package:21263399/2" override_package_urn="urn:adsk.eagle:footprint:21263400/1" value="74LVC1G08"/>
+<part name="U4" library="74LVC1G00GW" deviceset="74LVC1G00GW" device="" override_package3d_urn="urn:adsk.eagle:package:21263399/2" override_package_urn="urn:adsk.eagle:footprint:21263400/1" value="74HCT1G08"/>
 <part name="U$36" library="microbuilder" deviceset="GND" device=""/>
-<part name="U5" library="74LVC1G00GW" deviceset="74LVC1G00GW" device="" override_package3d_urn="urn:adsk.eagle:package:21263399/2" override_package_urn="urn:adsk.eagle:footprint:21263400/1" value="74LVC1G08"/>
+<part name="U5" library="74LVC1G00GW" deviceset="74LVC1G00GW" device="" override_package3d_urn="urn:adsk.eagle:package:21263399/2" override_package_urn="urn:adsk.eagle:footprint:21263400/1" value="74HCT1G08"/>
 <part name="U$37" library="microbuilder" deviceset="GND" device=""/>
 <part name="C5" library="rcl" library_urn="urn:adsk.eagle:library:334" deviceset="C-EU" device="C0805" package3d_urn="urn:adsk.eagle:package:23617/2" value="100n"/>
 <part name="D6" library="led" library_urn="urn:adsk.eagle:library:259" deviceset="LED" device="CHIP-LED0805" package3d_urn="urn:adsk.eagle:package:15818/2" value="RE"/>

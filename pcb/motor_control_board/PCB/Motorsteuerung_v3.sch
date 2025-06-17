@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE eagle SYSTEM "eagle.dtd">
-<eagle version="9.6.0">
+<eagle version="9.6.2">
 <drawing>
 <settings>
 <setting alwaysvectorfont="no"/>
@@ -20989,7 +20989,7 @@ Source: www.farnell.com/datasheets/247.pdf</description>
 <part name="C25" library="rcl" library_urn="urn:adsk.eagle:library:334" deviceset="C-EU" device="C0805" package3d_urn="urn:adsk.eagle:package:23617/2" value="1u"/>
 <part name="U$56" library="microbuilder" deviceset="GND" device=""/>
 <part name="C26" library="rcl" library_urn="urn:adsk.eagle:library:334" deviceset="C-EU" device="C0805" package3d_urn="urn:adsk.eagle:package:23617/2" value="100n"/>
-<part name="U4" library="74LVC1G00GW" deviceset="74LVC1G00GW" device="" override_package3d_urn="urn:adsk.eagle:package:21263399/2" override_package_urn="urn:adsk.eagle:footprint:21263400/1" value="74LVC1G08"/>
+<part name="U4" library="74LVC1G00GW" deviceset="74LVC1G00GW" device="" override_package3d_urn="urn:adsk.eagle:package:21263399/2" override_package_urn="urn:adsk.eagle:footprint:21263400/1" value="74HCT1G08"/>
 <part name="U$57" library="microbuilder" deviceset="GND" device=""/>
 <part name="J3" library="SparkFun-Connectors" library_urn="urn:adsk.eagle:library:513" deviceset="CONN_04" device="1.27MM" package3d_urn="urn:adsk.eagle:package:38086/1" override_package3d_urn="urn:adsk.eagle:package:16345249/2" override_package_urn="urn:adsk.eagle:footprint:37705/1"/>
 <part name="U$58" library="microbuilder" deviceset="GND" device=""/>
